@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json, shutil, subprocess, sys; payload=json.load(sys.stdin); tool_input=payload.get('tool_input') or {}; path=tool_input.get('file_path') or tool_input.get('path') or ''; sys.exit(0) if not path.endswith('.py') or shutil.which('ruff') is None else sys.exit(subprocess.call(['ruff', 'check', path]))\""
+          }
+        ]
+      }
+    ]
+  }
+}
