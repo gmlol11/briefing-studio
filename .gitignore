@@ -7,3 +7,13 @@ node_modules/
 dist/
 .DS_Store
 *.log
+
+# Local agent config (machine-specific)
+.claude/settings.local.json
+
+# Python tool caches / build artifacts
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+build/
