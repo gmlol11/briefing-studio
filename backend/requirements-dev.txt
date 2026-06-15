@@ -1,0 +1,11 @@
+# Backend development / QA dependencies.
+# Install with:  pip install -r requirements-dev.txt
+# Includes everything from requirements.txt plus tooling not needed at runtime.
+
+-r requirements.txt
+
+# Linting (used by CLAUDE.md `ruff check .` and the .claude PostToolUse hook)
+ruff>=0.6
+
+# Testing
+pytest>=8.0
