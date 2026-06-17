@@ -164,6 +164,7 @@ class BriefListItem(BaseModel):
     brief_type: BriefType
     current_step: str
     is_generated_outdated: bool = False
+    brand_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
