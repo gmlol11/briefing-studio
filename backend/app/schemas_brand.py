@@ -138,6 +138,15 @@ class Clarifications(BaseModel):
 # --- request bodies -------------------------------------------------------
 
 
+class FreeformBriefCreate(BaseModel):
+    """Создание брифа, привязанного к бренду (brand-aware freeform flow)."""
+
+    brand_id: int
+    title: str = Field(default="Новый бриф", max_length=255)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class FreeformInputRequest(BaseModel):
     raw_input_text: str = Field(min_length=1)
 
