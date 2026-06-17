@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # --- enums ----------------------------------------------------------------
@@ -69,3 +69,90 @@ class BrandListItem(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- freeform structures (validated against LLM output before storage) ----
+
+
+class InputSummary(BaseModel):
+    """Структурированное summary свободного клиентского ввода."""
+
+    summary: str = ""
+    key_facts: list[str] = Field(default_factory=list)
+    explicit_requirements: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    uncertain_fragments: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class StructuredField(BaseModel):
+    """Один пункт структурированного брифа с evidence."""
+
+    key: str = ""
+    value: str = ""
+    source_type: SourceType = SourceType.unknown
+    source_ref: str = ""
+    confidence: float = 0.0
+    status: FieldStatus = FieldStatus.needs_confirmation
+    comment: str = ""
+
+    model_config = ConfigDict(extra="ignore")
+
+    @field_validator("confidence")
+    @classmethod
+    def _clamp_confidence(cls, value: float) -> float:
+        if 1 < value <= 100:  # модель могла вернуть проценты
+            value = value / 100
+        return max(0.0, min(1.0, value))
+
+
+class StructuredBrief(BaseModel):
+    fields: list[StructuredField] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class ClarificationImportance(str, Enum):
+    critical = "critical"
+    recommended = "recommended"
+    optional = "optional"
+
+
+class ClarificationQuestion(BaseModel):
+    id: str = ""
+    field: str = ""
+    question: str = ""
+    importance: ClarificationImportance = ClarificationImportance.recommended
+    options: list[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class Clarifications(BaseModel):
+    questions: list[ClarificationQuestion] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+# --- request bodies -------------------------------------------------------
+
+
+class FreeformInputRequest(BaseModel):
+    raw_input_text: str = Field(min_length=1)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ClarificationAnswer(BaseModel):
+    question_id: str = ""
+    field: str = ""
+    answer: str = ""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ApplyClarificationsRequest(BaseModel):
+    answers: list[ClarificationAnswer] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="forbid")
