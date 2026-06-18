@@ -211,15 +211,36 @@ LLM_TIMEOUT_SECONDS=60                   # таймаут запроса
 (`gpt-5.4`, не `GPT-5.4`) — сверяйте по `GET {LLM_BASE_URL}/models`. Промпты — в
 `backend/app/prompts/`.
 
+## Два режима создания брифа
+
+1. **Wizard-flow** — ручное пошаговое заполнение `context_json` (8 шагов), затем AI-анализ
+   и генерация. Маршруты `/brief/new`, `/brief/:id`.
+2. **Brand-aware freeform-flow** — бренд → свободный клиентский текст → AI-summary →
+   подтверждение → структурирование с evidence (`source_type` / `confidence` / `status` /
+   `comment`) → уточнения (critical / recommended / optional) → финальный markdown
+   (переиспользует `BriefVersion` / hash / export). Маршруты `/brands*`, `/brief/new/freeform`,
+   `/brief/:id/review`.
+
+Brand-aware добавляет модели `Brand` и `BrandSource`, аддитивные nullable-поля в `Brief`
+(`brand_id`, `raw_input_text`, `input_summary_json`, `is_input_summary_verified`,
+`structured_brief_json`, `clarifications_json`) и эндпоинты `/api/brands` + freeform-операции
+под `/api/briefs/{id}/…`. `internet`, `transcript`, `BrandSource` — архитектурные заделы;
+web search / audio / загрузки файлов в MVP нет. Старый wizard-flow сохранён без изменений.
+Подробности и ручная проверка обоих flow — в [docs/brand-aware-flow.md](docs/brand-aware-flow.md).
+
 ## Маршруты frontend
 
-- `/` — стартовая страница
-- `/briefs` — список созданных брифов
-- `/brief/new` — создание нового брифа и старт wizard (редирект на `/brief/:id`)
-- `/brief/:id` — пошаговый wizard редактирования брифа
+- `/` — стартовая страница (два способа создать бриф)
+- `/briefs` — список брифов (wizard и freeform; freeform помечены бейджем)
+- `/brief/new` — wizard-бриф (редирект на `/brief/:id`)
+- `/brief/:id` — wizard-редактор (freeform-брифы редиректятся на `/brief/:id/review`)
+- `/brands`, `/brands/new`, `/brands/:id` — управление брендами
+- `/brief/new/freeform` — создание brand-aware freeform-брифа
+- `/brief/:id/review` — review-экран freeform-флоу
 
 ## Документация
 
+- [docs/brand-aware-flow.md](docs/brand-aware-flow.md) — brand-aware freeform-flow (ADR, API, UI)
 - [docs/architecture.md](docs/architecture.md) — архитектура и компоненты
 - [docs/ui-audit.md](docs/ui-audit.md) — UI/UX-аудит demo-ui и план визуала
 - [docs/acceptance-checklist.md](docs/acceptance-checklist.md) — приёмочные проверки
