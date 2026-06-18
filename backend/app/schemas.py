@@ -149,6 +149,9 @@ class BriefRead(BaseModel):
     is_input_summary_verified: bool = False
     structured_brief_json: dict[str, Any] | None = None
     clarifications_json: dict[str, Any] | None = None
+    # output template (additive; null для wizard и freeform-брифов без шаблона)
+    selected_template_json: dict[str, Any] | None = None
+    reference_template_text: str | None = None
     created_at: datetime
     updated_at: datetime
 

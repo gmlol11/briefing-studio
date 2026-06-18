@@ -50,6 +50,54 @@ def default_context() -> dict[str, Any]:
     }
 
 
+def default_template() -> dict[str, Any]:
+    """Дефолтная структура итогового freeform-брифа.
+
+    Зеркалит разделы текущего финального промпта (generate_final_brand_brief):
+    разделы документа + ключи структурированных полей, которые их наполняют.
+    Используется как fallback, если у брифа нет selected_template_json.
+    """
+
+    def _field(key: str, label: str, *, required: bool = False) -> dict[str, Any]:
+        return {"key": key, "label": label, "selected": True, "required": required, "hint": ""}
+
+    def _section(
+        key: str, title: str, fields: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        return {"key": key, "title": title, "description": "", "selected": True, "fields": fields}
+
+    return {
+        "name": "Коммуникационный бриф (по умолчанию)",
+        "source": "default",
+        "sections": [
+            _section("context", "Контекст и бренд", []),
+            _section("goal", "Главная цель", [_field("main_goal", "Главная цель", required=True)]),
+            _section(
+                "audience",
+                "Целевая аудитория",
+                [_field("target_audience", "Целевая аудитория", required=True)],
+            ),
+            _section(
+                "key_message",
+                "Ключевое сообщение",
+                [_field("key_message", "Ключевое сообщение", required=True)],
+            ),
+            _section(
+                "tone", "Тональность (Tone of Voice)", [_field("tone_of_voice", "Тональность")]
+            ),
+            _section(
+                "object", "Объект продвижения", [_field("product_or_object", "Объект продвижения")]
+            ),
+            _section("channels", "Каналы коммуникации", [_field("channels", "Каналы")]),
+            _section("mandatories", "Обязательно (Mandatories)", [_field("mandatories", "Mandatories")]),
+            _section("restrictions", "Ограничения (Don'ts)", [_field("restrictions", "Ограничения")]),
+            _section("deliverables", "Deliverables", [_field("deliverables", "Deliverables")]),
+            _section("kpi", "KPI", [_field("kpi", "KPI")]),
+            _section("assumptions", "Допущения и открытые вопросы", []),
+        ],
+    }
+
+
 class Brief(Base):
     """Доменная модель брифа."""
 
@@ -84,6 +132,14 @@ class Brief(Base):
         JSONB, nullable=True
     )
     clarifications_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+
+    # --- output template (additive, nullable; freeform-only) ---
+    # Старый wizard-flow и freeform-брифы без шаблона эти поля не используют
+    # (остаются NULL → fallback на дефолтную структуру).
+    reference_template_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selected_template_json: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
 
