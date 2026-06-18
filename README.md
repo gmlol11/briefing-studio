@@ -41,7 +41,7 @@ briefing-studio/
 │   │   ├── services/          # llm_service, prompt_service, brief_ai_service
 │   │   ├── prompts/           # analyze_brief.md, generate_brief.md, regenerate_section.md
 │   │   └── utils.py           # context_hash (стабильный SHA-256)
-│   ├── alembic/versions/      # миграции 0001 → 0002 → 0003
+│   ├── alembic/versions/      # миграции 0001 → 0002 → 0003 → 0004
 │   ├── tests/                 # no-DB pytest smoke (app, hash, default_context, deep-merge)
 │   ├── requirements.txt       # рантайм-зависимости
 │   └── requirements-dev.txt   # + ruff, pytest
@@ -241,6 +241,7 @@ web search / audio / загрузки файлов в MVP нет. Старый w
 ## Документация
 
 - [docs/brand-aware-flow.md](docs/brand-aware-flow.md) — brand-aware freeform-flow (ADR, API, UI)
+- [docs/handoff-brand-aware-mvp.md](docs/handoff-brand-aware-mvp.md) — handoff-summary текущего состояния (git, flow, файлы, проверки)
 - [docs/architecture.md](docs/architecture.md) — архитектура и компоненты
 - [docs/ui-audit.md](docs/ui-audit.md) — UI/UX-аудит demo-ui и план визуала
 - [docs/acceptance-checklist.md](docs/acceptance-checklist.md) — приёмочные проверки
@@ -255,7 +256,7 @@ web search / audio / загрузки файлов в MVP нет. Старый w
 - Backend: модель брифа + версии + lifecycle, CRUD, LLM-слой, экспорт, hash/outdated —
   покрыты no-DB pytest-смоком; `ruff check` чистый.
 - Frontend: wizard + Live brief + документный рендер + AI-блок; `tsc -b` + `vite build` зелёные.
-- Docker: полный стек собирается и проверен (health, Swagger, миграции `0003 (head)`, CRUD-smoke,
+- Docker: полный стек собирается и проверен (health, Swagger, миграции `0004 (head)`, CRUD-smoke,
   реальная генерация через OpenAI). Compose — dev-профиль; production-профиль см. deploy-plan.
 - Git: репозиторий инициализирован, `.gitignore` усилен (секреты и кэши исключены).
 
