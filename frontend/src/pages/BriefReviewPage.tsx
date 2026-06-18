@@ -1,34 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import type {
-  Brief,
-  ClarificationImportance,
-  FieldStatus,
-  SourceType,
-} from '../api/types'
+import type { Brief, ClarificationImportance } from '../api/types'
 import { api, ApiError } from '../api/client'
 import MarkdownView from '../components/MarkdownView'
-
-const SOURCE_LABELS: Record<SourceType, string> = {
-  brand_bible: 'бренд-библия',
-  client_brief: 'клиентский бриф',
-  transcript: 'транскрипт',
-  manager_note: 'заметка менеджера',
-  inference: 'домысел AI',
-  internet: 'интернет',
-  user_edit: 'правка пользователя',
-  unknown: 'неизвестно',
-}
-
-const STATUS_LABELS: Record<FieldStatus, string> = {
-  confirmed: 'подтверждено',
-  confirmed_by_brand: 'из бренда',
-  needs_confirmation: 'нужно подтвердить',
-  critical_missing: 'критично: нет данных',
-  optional_missing: 'опционально: нет данных',
-  conflict: 'конфликт',
-  rejected: 'отклонено',
-}
+import SourceBadge from '../components/SourceBadge'
+import StatusBadge from '../components/StatusBadge'
 
 const IMPORTANCE_ORDER: ClarificationImportance[] = ['critical', 'recommended', 'optional']
 const IMPORTANCE_LABELS: Record<ClarificationImportance, string> = {
@@ -39,6 +15,15 @@ const IMPORTANCE_LABELS: Record<ClarificationImportance, string> = {
 
 const CRITICAL_409 =
   'Есть критичные незаполненные или неподтверждённые поля. Ответьте на вопросы в блоке уточнений.'
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}
 
 function List({ items }: { items: string[] }) {
   const clean = items.filter((s) => s.trim())
@@ -52,7 +37,7 @@ function List({ items }: { items: string[] }) {
   )
 }
 
-/** Рабочий review-flow brand-aware брифа. */
+/** Review-flow brand-aware брифа: summary → структура → уточнения → финал. */
 export default function BriefReviewPage() {
   const { id } = useParams<{ id: string }>()
   const [brief, setBrief] = useState<Brief | null>(null)
@@ -61,6 +46,7 @@ export default function BriefReviewPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -97,11 +83,8 @@ export default function BriefReviewPage() {
     try {
       setBrief(await fn())
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        setError(conflictMsg ?? e.message)
-      } else {
-        setError((e as Error).message)
-      }
+      if (e instanceof ApiError && e.status === 409) setError(conflictMsg ?? e.message)
+      else setError((e as Error).message)
     } finally {
       setBusy(null)
     }
@@ -131,6 +114,31 @@ export default function BriefReviewPage() {
     })
   }
 
+  const copyMarkdown = async () => {
+    if (!brief.generated_markdown) return
+    if (await copyText(brief.generated_markdown)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const downloadExport = async (format: 'markdown' | 'json') => {
+    setError(null)
+    try {
+      const blob = await api.exportBrief(brief.id, format)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `brief-${brief.id}.${format === 'markdown' ? 'md' : 'json'}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+
   return (
     <div className="review-page">
       <div className="briefs-page__head">
@@ -147,7 +155,7 @@ export default function BriefReviewPage() {
 
       {error && <div className="form-error">{error}</div>}
 
-      {/* A. Raw input */}
+      {/* Raw input */}
       <section className="card review-section">
         <h3>Исходный клиентский бриф</h3>
         {brief.raw_input_text ? (
@@ -157,18 +165,20 @@ export default function BriefReviewPage() {
         )}
       </section>
 
-      {/* B. Summary */}
+      {/* 1. Summary */}
       <section className="card review-section">
         <h3>1. Summary</h3>
         {!summary ? (
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={() => run('summarize', () => api.summarizeInput(brief.id))}
-            disabled={busy !== null || !brief.raw_input_text}
-          >
-            {busy === 'summarize' ? 'Генерируем…' : 'Сгенерировать summary'}
-          </button>
+          <div className="review-actions">
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => run('summarize', () => api.summarizeInput(brief.id))}
+              disabled={busy !== null || !brief.raw_input_text}
+            >
+              {busy === 'summarize' ? 'Генерируем…' : 'Сгенерировать summary'}
+            </button>
+          </div>
         ) : (
           <>
             <p>{summary.summary || '—'}</p>
@@ -206,37 +216,49 @@ export default function BriefReviewPage() {
         )}
       </section>
 
-      {/* C. Structured brief */}
+      {/* 2. Structured brief */}
       <section className="card review-section">
         <h3>2. Структурированный бриф</h3>
         {!structured ? (
           brief.is_input_summary_verified ? (
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => run('structure', () => api.structureBrief(brief.id))}
-              disabled={busy !== null}
-            >
-              {busy === 'structure' ? 'Структурируем…' : 'Структурировать бриф'}
-            </button>
+            <div className="review-actions">
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => run('structure', () => api.structureBrief(brief.id))}
+                disabled={busy !== null}
+              >
+                {busy === 'structure' ? 'Структурируем…' : 'Структурировать бриф'}
+              </button>
+            </div>
           ) : (
             <p className="review-muted">Подтвердите summary, чтобы структурировать бриф.</p>
           )
         ) : (
           <>
-            <div className="review-fields">
-              {structured.fields.map((f, i) => (
-                <div className="review-field" key={f.key || i}>
-                  <div className="review-field__key">{f.key || '(без ключа)'}</div>
-                  <div className="review-field__value">{f.value || '—'}</div>
-                  <div className="review-field__meta">
-                    источник: {SOURCE_LABELS[f.source_type] ?? f.source_type} · уверенность:{' '}
-                    {Math.round((f.confidence ?? 0) * 100)}% · статус:{' '}
-                    {STATUS_LABELS[f.status] ?? f.status}
+            <div className="review-grid">
+              {structured.fields.map((f, i) => {
+                const pct = Math.round((f.confidence ?? 0) * 100)
+                return (
+                  <div className="review-card" key={f.key || i}>
+                    <div className="review-card__head">
+                      <span className="review-card__key">{f.key || '(без ключа)'}</span>
+                      <StatusBadge status={f.status} />
+                    </div>
+                    <div className="review-card__value">{f.value || '—'}</div>
+                    <div className="review-card__foot">
+                      <SourceBadge source={f.source_type} />
+                      <span className="confidence">
+                        <span className="confidence-bar">
+                          <span style={{ width: `${pct}%` }} />
+                        </span>
+                        <span className="confidence-value">{pct}%</span>
+                      </span>
+                    </div>
+                    {f.comment && <div className="review-card__comment">{f.comment}</div>}
                   </div>
-                  {f.comment && <div className="review-field__comment">{f.comment}</div>}
-                </div>
-              ))}
+                )
+              })}
             </div>
             <div className="review-actions">
               <button
@@ -252,33 +274,37 @@ export default function BriefReviewPage() {
         )}
       </section>
 
-      {/* D. Clarifications */}
+      {/* 3. Clarifications */}
       {structured && (
         <section className="card review-section">
           <h3>3. Уточняющие вопросы</h3>
           {!clarifications ? (
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => run('clarify', () => api.generateClarifications(brief.id))}
-              disabled={busy !== null}
-            >
-              {busy === 'clarify' ? 'Генерируем…' : 'Сгенерировать вопросы'}
-            </button>
+            <div className="review-actions">
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => run('clarify', () => api.generateClarifications(brief.id))}
+                disabled={busy !== null}
+              >
+                {busy === 'clarify' ? 'Генерируем…' : 'Сгенерировать вопросы'}
+              </button>
+            </div>
           ) : (
             <>
               {IMPORTANCE_ORDER.map((imp) => {
                 const qs = clarifications.questions.filter((q) => q.importance === imp)
                 if (!qs.length) return null
                 return (
-                  <div className="clarif-group" key={imp}>
+                  <div className={`clarification-group clarification-group--${imp}`} key={imp}>
                     <h4>{IMPORTANCE_LABELS[imp]}</h4>
                     {qs.map((q, i) => {
                       const key = q.id || q.field || `q${i}`
                       return (
-                        <div className="clarif-q" key={key}>
-                          <div className="clarif-q__text">{q.question}</div>
-                          {q.field && <div className="clarif-q__field">поле: {q.field}</div>}
+                        <div className="clarification-card" key={key}>
+                          <div className="clarification-card__q">{q.question}</div>
+                          {q.field && (
+                            <div className="clarification-card__field">поле: {q.field}</div>
+                          )}
                           {q.options.length > 0 && (
                             <div className="review-muted">варианты: {q.options.join(', ')}</div>
                           )}
@@ -319,7 +345,7 @@ export default function BriefReviewPage() {
         </section>
       )}
 
-      {/* E. Final generation */}
+      {/* 4. Final generation */}
       {structured && (
         <section className="card review-section">
           <h3>4. Финальный бриф</h3>
@@ -344,6 +370,27 @@ export default function BriefReviewPage() {
                   ? 'Сгенерировать заново'
                   : 'Сгенерировать финальный бриф'}
             </button>
+            {brief.generated_markdown && (
+              <>
+                <button type="button" className="btn btn--ghost" onClick={copyMarkdown}>
+                  {copied ? 'Скопировано ✓' : 'Copy Markdown'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => downloadExport('markdown')}
+                >
+                  Download Markdown
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => downloadExport('json')}
+                >
+                  Download JSON
+                </button>
+              </>
+            )}
           </div>
           {brief.generated_markdown && (
             <div className="doc-frame" style={{ marginTop: 16 }}>
