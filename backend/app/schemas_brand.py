@@ -207,3 +207,21 @@ class BriefTemplate(BaseModel):
     sections: list[TemplateSection] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="ignore")
+
+
+class DecomposeTemplateRequest(BaseModel):
+    """Декомпозиция референс-текста в структуру итогового брифа (AI, stateless)."""
+
+    reference_text: str = Field(min_length=1)
+    brand_id: int | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SelectTemplateRequest(BaseModel):
+    """Сохранение выбранной структуры в конкретный Brief."""
+
+    template: BriefTemplate
+    reference_text: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
