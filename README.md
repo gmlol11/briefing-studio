@@ -142,12 +142,37 @@ npm install
 npm run dev
 ```
 
+## Демо-данные (dev-only)
+
+Идемпотентный seed-скрипт наполняет БД демо-данными для ручной проверки обоих flow
+**без LLM**: бренд (+ источник), wizard-бриф (заполненный) и freeform-бриф (на ревью),
+плюс по одному **pre-generated** брифу каждого типа (готовый markdown + версия) — чтобы
+офлайн увидеть документ, версии, export и `is_generated_outdated`.
+
+```bash
+cd backend
+# DATABASE_URL должен указывать на dev-БД с применёнными миграциями (alembic upgrade head)
+python scripts/seed_demo.py            # создать / обновить демо-данные (идемпотентно)
+python scripts/seed_demo.py --reset    # удалить демо-строки и пересоздать
+python scripts/seed_demo.py --dry-run  # только валидация блобов, без записи в БД
+```
+
+В Docker: `docker compose exec backend python scripts/seed_demo.py`. Скрипт **dev-only**
+(откажется работать, если `APP_ENV` не dev — обойти можно `--force`), пишет через ORM,
+повторный запуск не плодит дубли (строки помечены маркером `[DEMO]`). Полный сценарий
+ручного QA — в [docs/manual-qa-brand-aware-flow.md](docs/manual-qa-brand-aware-flow.md).
+
 ## Тесты и качество
 
 ```bash
 cd backend
-pytest -q          # no-DB smoke (app import, OpenAPI, context_hash, default_context, deep-merge)
-ruff check .       # линт
+pytest -m "not db" -q   # no-DB smoke (app import, OpenAPI, context_hash, default_context, deep-merge)
+ruff check .            # линт
+
+# DB-интеграция (brands CRUD, freeform flow, 409-гейт, cascade, outdated, seed): нужен Postgres
+createdb -E UTF8 briefing_test
+export TEST_DATABASE_URL=postgresql+psycopg://briefing@localhost:5432/briefing_test
+pytest -q               # все тесты; без TEST_DATABASE_URL db-тесты автоматически skipped
 ```
 
 В `.claude/settings.json` настроен PostToolUse-хук: после `Edit`/`Write` он запускает
@@ -242,6 +267,7 @@ web search / audio / загрузки файлов в MVP нет. Старый w
 
 - [docs/brand-aware-flow.md](docs/brand-aware-flow.md) — brand-aware freeform-flow (ADR, API, UI)
 - [docs/handoff-brand-aware-mvp.md](docs/handoff-brand-aware-mvp.md) — handoff-summary текущего состояния (git, flow, файлы, проверки)
+- [docs/manual-qa-brand-aware-flow.md](docs/manual-qa-brand-aware-flow.md) — ручной QA/UX-аудит обоих flow + demo seed
 - [docs/architecture.md](docs/architecture.md) — архитектура и компоненты
 - [docs/ui-audit.md](docs/ui-audit.md) — UI/UX-аудит demo-ui и план визуала
 - [docs/acceptance-checklist.md](docs/acceptance-checklist.md) — приёмочные проверки

@@ -17,10 +17,12 @@ import sys
 import pytest
 
 # Make the backend root (parent of tests/) importable as the `app` package,
-# and tests/ importable for `import fakes`, regardless of working directory.
+# tests/ importable for `import fakes`, and scripts/ for `import seed_demo`.
 _TESTS_DIR = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(_TESTS_DIR.parent))
+_BACKEND_ROOT = _TESTS_DIR.parent
+sys.path.insert(0, str(_BACKEND_ROOT))
 sys.path.insert(0, str(_TESTS_DIR))
+sys.path.insert(0, str(_BACKEND_ROOT / "scripts"))
 
 # Tables truncated between DB tests (children first for clarity; CASCADE covers FKs).
 _TABLES = ("brief_versions", "brand_sources", "briefs", "brands")
