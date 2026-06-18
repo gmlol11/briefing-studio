@@ -40,9 +40,20 @@ from sqlalchemy import create_engine, func, select  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
-from app.models import Brand, BrandSource, Brief, BriefVersion  # noqa: E402
+from app.models import (  # noqa: E402
+    Brand,
+    BrandSource,
+    Brief,
+    BriefVersion,
+    default_template,
+)
 from app.schemas import BriefContext  # noqa: E402
-from app.schemas_brand import Clarifications, InputSummary, StructuredBrief  # noqa: E402
+from app.schemas_brand import (  # noqa: E402
+    BriefTemplate,
+    Clarifications,
+    InputSummary,
+    StructuredBrief,
+)
 from app.utils import context_hash  # noqa: E402
 
 # --- markers used for idempotency -----------------------------------------
@@ -157,6 +168,35 @@ CLARIFICATIONS = {
     ]
 }
 
+# Структура итогового брифа: review-бриф — стандартная, generated-бриф — из референса.
+DEFAULT_TEMPLATE = default_template()  # source="default"
+
+REFERENCE_TEMPLATE = {
+    "name": "Структура из референса клиента",
+    "source": "reference",
+    "sections": [
+        {"key": "goal", "title": "Цель кампании", "description": "", "selected": True,
+         "fields": [{"key": "main_goal", "label": "Главная цель", "selected": True,
+                     "required": True, "hint": ""}]},
+        {"key": "audience", "title": "Аудитория", "description": "", "selected": True,
+         "fields": [{"key": "target_audience", "label": "ЦА", "selected": True,
+                     "required": True, "hint": ""}]},
+        {"key": "format", "title": "Форматы и каналы", "description": "", "selected": True,
+         "fields": [
+             {"key": "format", "label": "Формат", "selected": True, "required": False, "hint": ""},
+             {"key": "channels", "label": "Каналы", "selected": True, "required": False, "hint": ""},
+         ]},
+        {"key": "constraints", "title": "Ограничения", "description": "", "selected": False,
+         "fields": [{"key": "restrictions", "label": "Ограничения", "selected": False,
+                     "required": False, "hint": ""}]},
+    ],
+}
+
+REFERENCE_TEMPLATE_TEXT = (
+    "Структура нашего брифа:\n"
+    "1. Цель кампании\n2. Аудитория\n3. Форматы и каналы\n4. Ограничения\n"
+)
+
 WIZARD_GENERATED_MD = (
     "# Бриф: промо-ролик «Север»\n\n"
     "## Цель\nПовысить узнаваемость линейки и собрать охваты.\n\n"
@@ -180,6 +220,8 @@ def validate_blobs() -> None:
     InputSummary.model_validate(INPUT_SUMMARY)
     StructuredBrief.model_validate(STRUCTURED_BRIEF)
     Clarifications.model_validate(CLARIFICATIONS)
+    BriefTemplate.model_validate(DEFAULT_TEMPLATE)
+    BriefTemplate.model_validate(REFERENCE_TEMPLATE)
 
 
 # --- seeding ---------------------------------------------------------------
@@ -212,10 +254,17 @@ def _get_or_create_brief(session: Session, title: str) -> Brief:
 
 
 def _ensure_single_version(
-    session: Session, brief: Brief, markdown: str, snapshot: dict, gen_type: str
+    session: Session,
+    brief: Brief,
+    markdown: str,
+    snapshot: dict,
+    gen_type: str,
+    meta_extra: dict | None = None,
 ) -> None:
     """Keep exactly one BriefVersion (v1) so re-runs don't stack versions."""
     meta = {"model": "demo (no LLM)", "generation_type": gen_type, "source": "seed_demo"}
+    if meta_extra:
+        meta.update(meta_extra)
     if brief.versions:
         version = brief.versions[0]
         version.generated_markdown = markdown
@@ -252,6 +301,7 @@ def _seed_wizard(session: Session) -> None:
 
 
 def _seed_freeform(session: Session, brand: Brand) -> None:
+    # На ревью: стандартная структура (source="default").
     review = _get_or_create_brief(session, FREEFORM_REVIEW_TITLE)
     review.brand_id = brand.id
     review.status = "in_progress"
@@ -261,7 +311,9 @@ def _seed_freeform(session: Session, brand: Brand) -> None:
     review.is_input_summary_verified = True
     review.structured_brief_json = STRUCTURED_BRIEF
     review.clarifications_json = CLARIFICATIONS
+    review.selected_template_json = DEFAULT_TEMPLATE
 
+    # Готовый: структура из референса (source="reference") + текст референса.
     gen = _get_or_create_brief(session, FREEFORM_GENERATED_TITLE)
     gen.brand_id = brand.id
     gen.status = "generated"
@@ -271,11 +323,19 @@ def _seed_freeform(session: Session, brand: Brand) -> None:
     gen.is_input_summary_verified = True
     gen.structured_brief_json = STRUCTURED_BRIEF
     gen.clarifications_json = CLARIFICATIONS
+    gen.selected_template_json = REFERENCE_TEMPLATE
+    gen.reference_template_text = REFERENCE_TEMPLATE_TEXT
     gen.generated_markdown = FREEFORM_GENERATED_MD
-    gen.generated_from_context_hash = context_hash(STRUCTURED_BRIEF)
+    # hash от того же источника, что и is_generated_outdated (structured + template)
+    gen.generated_from_context_hash = context_hash(gen.generated_hash_source())
     session.flush()
     _ensure_single_version(
-        session, gen, FREEFORM_GENERATED_MD, STRUCTURED_BRIEF, "brand_freeform"
+        session,
+        gen,
+        FREEFORM_GENERATED_MD,
+        {"structured": STRUCTURED_BRIEF, "template": REFERENCE_TEMPLATE},
+        "brand_freeform",
+        {"template_source": REFERENCE_TEMPLATE["source"]},
     )
 
 
@@ -357,12 +417,12 @@ def main(argv: list[str] | None = None) -> int:
 
     validate_blobs()
     if args.dry_run:
-        print("[dry-run] demo blobs valid. Would create/update:")
+        print("[dry-run] demo blobs valid (incl. template). Would create/update:")
         print(f"  brand:  {DEMO_BRAND_NAME} (+1 brand_bible source)")
         print(f"  briefs: {WIZARD_DRAFT_TITLE}")
         print(f"          {WIZARD_GENERATED_TITLE} (pre-generated, +1 version)")
-        print(f"          {FREEFORM_REVIEW_TITLE}")
-        print(f"          {FREEFORM_GENERATED_TITLE} (pre-generated, +1 version)")
+        print(f"          {FREEFORM_REVIEW_TITLE} (template: default)")
+        print(f"          {FREEFORM_GENERATED_TITLE} (pre-generated, template: reference, +1 version)")
         return 0
 
     _check_dev_env(args.force)

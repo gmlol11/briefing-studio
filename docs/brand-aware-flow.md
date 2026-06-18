@@ -135,3 +135,54 @@ freeform-брифы бейджем «Freeform».
 Аудио/транскрипция, RAG, web search, загрузка файлов, авторизация, PDF/DOCX. `internet`,
 `transcript`, `BrandSource` — архитектурные заделы (в текущем MVP реального web-search/audio/
 файлов нет). Также вне MVP: фильтры и инлайн-редактирование structured-полей.
+
+---
+
+# ADR-update: per-brief template layer (MVP-2)
+
+Status: accepted — backend + frontend реализованы. Миграция `0005` (аддитивная).
+
+## Контекст
+Перед анализом клиентского ввода пользователь должен выбрать/собрать **структуру итогового
+брифа**: стандартную либо декомпозированную AI из текстового референса, отметив нужные
+разделы/поля чекбоксами. Дальше structure и generate-final работают с учётом этой структуры.
+
+## Решения
+1. **JSONB в `Brief`, не отдельная таблица.** Шаблон — настройка конкретного брифа (как
+   `structured_brief_json`), кросс-брифного переиспользования нет → отдельная таблица дала бы
+   лишние join/миграции без выгоды. Отдельную `Template` / brand-level дефолт вводим позже,
+   когда понадобятся переиспользуемые пресеты. Дефолт сейчас — константа `models.default_template()`,
+   зеркалит разделы финального промпта.
+2. **Аддитивные nullable-поля `Brief`** (миграция `0005`, только add column): `selected_template_json`
+   (JSONB) — выбранная структура; `reference_template_text` (Text) — исходный референс. Старый
+   wizard и freeform-брифы без шаблона их не используют.
+3. **Форма шаблона** (`BriefTemplate`): `name`, `source` (`default|reference|custom`),
+   `sections[]` (`key/title/description/selected/fields[]`), `field` (`key/label/selected/required/hint`).
+   `field.key` совпадает с `StructuredField.key` — связывает шаблон со структурой и финалом.
+
+## API
+- `GET /api/briefs/template/default` — дефолтная `BriefTemplate` (без LLM, без брифа).
+- `POST /api/briefs/template/decompose` `{reference_text, brand_id?}` — AI-декомпозиция референса
+  в `BriefTemplate` (stateless; `source="reference"`; при `brand_id` — учитывается brand context).
+- `POST /api/briefs/{id}/select-template` `{template, reference_text?}` — сохранить выбор в бриф.
+
+Промпт `decompose_template.md` извлекает только структуру (не контент).
+
+## Влияние на structure / generate-final / hash
+- `_payload` передаёт `selected_template_json` в промпты. `structure_brand_brief` (режим шаблона):
+  поля по `key` шаблона, `required`-поля без данных → `critical_missing`; `selected=false` игнор.
+  `generate_final_brand_brief`: разделы по порядку/заголовкам шаблона, только `selected`.
+- **Hash/outdated** (`Brief.generated_hash_source()`): freeform с шаблоном → `{structured, template}`,
+  без шаблона → только `structured_brief_json` (как раньше); wizard → `context_json`. Изменение
+  шаблона после генерации → `is_generated_outdated=true`.
+- `BriefVersion.context_snapshot_json` для template-aware freeform = `{structured, template}`;
+  `generation_meta_json` дополнен `template_source`. Без шаблона — прежний совместимый snapshot.
+
+## Fallback / обратная совместимость
+`selected_template_json is None` → промпты идут в прежнюю ветку (12 фикс-разделов / рекомендуемые
+ключи), hash/snapshot — прежнего формата. Существующие freeform-брифы и их состояние `outdated`
+не меняются. `structure` толерантна к отсутствию шаблона (не жёсткий гейт). Wizard-flow не затронут.
+
+## Сознательно вне этой итерации
+File upload/loaders (референс — только вставка текста), DOCX/PDF, stepper-редизайн, brand
+identity, отдельная таблица шаблонов, brand-level дефолт, инлайн-редактирование structured-полей.

@@ -41,7 +41,7 @@ briefing-studio/
 │   │   ├── services/          # llm_service, prompt_service, brief_ai_service
 │   │   ├── prompts/           # analyze_brief.md, generate_brief.md, regenerate_section.md
 │   │   └── utils.py           # context_hash (стабильный SHA-256)
-│   ├── alembic/versions/      # миграции 0001 → 0002 → 0003 → 0004
+│   ├── alembic/versions/      # миграции 0001 → 0002 → 0003 → 0004 → 0005
 │   ├── tests/                 # no-DB pytest smoke (app, hash, default_context, deep-merge)
 │   ├── requirements.txt       # рантайм-зависимости
 │   └── requirements-dev.txt   # + ruff, pytest
@@ -157,6 +157,10 @@ python scripts/seed_demo.py --reset    # удалить демо-строки и
 python scripts/seed_demo.py --dry-run  # только валидация блобов, без записи в БД
 ```
 
+Демо-freeform-брифы **template-aware**: один со стандартной структурой (`source=default`),
+один с структурой из референса (`source=reference` + `reference_template_text`); pre-generated
+freeform-бриф имеет корректный hash и snapshot версии по `structured + template`.
+
 В Docker: `docker compose exec backend python scripts/seed_demo.py`. Скрипт **dev-only**
 (откажется работать, если `APP_ENV` не dev — обойти можно `--force`), пишет через ORM,
 повторный запуск не плодит дубли (строки помечены маркером `[DEMO]`). Полный сценарий
@@ -169,7 +173,7 @@ cd backend
 pytest -m "not db" -q   # no-DB smoke (app import, OpenAPI, context_hash, default_context, deep-merge)
 ruff check .            # линт
 
-# DB-интеграция (brands CRUD, freeform flow, 409-гейт, cascade, outdated, seed): нужен Postgres
+# DB-интеграция (brands CRUD, freeform flow, template layer, 409-гейт, cascade, outdated, seed): нужен Postgres
 createdb -E UTF8 briefing_test
 export TEST_DATABASE_URL=postgresql+psycopg://briefing@localhost:5432/briefing_test
 pytest -q               # все тесты; без TEST_DATABASE_URL db-тесты автоматически skipped
@@ -240,18 +244,24 @@ LLM_TIMEOUT_SECONDS=60                   # таймаут запроса
 
 1. **Wizard-flow** — ручное пошаговое заполнение `context_json` (8 шагов), затем AI-анализ
    и генерация. Маршруты `/brief/new`, `/brief/:id`.
-2. **Brand-aware freeform-flow** — бренд → свободный клиентский текст → AI-summary →
-   подтверждение → структурирование с evidence (`source_type` / `confidence` / `status` /
-   `comment`) → уточнения (critical / recommended / optional) → финальный markdown
+2. **Brand-aware freeform-flow** — бренд → **выбор структуры итогового брифа** (стандартная
+   или из референса) → свободный клиентский текст → AI-summary → подтверждение →
+   структурирование с evidence (`source_type` / `confidence` / `status` / `comment`) под
+   выбранную структуру → уточнения (critical / recommended / optional) → финальный markdown
    (переиспользует `BriefVersion` / hash / export). Маршруты `/brands*`, `/brief/new/freeform`,
    `/brief/:id/review`.
 
 Brand-aware добавляет модели `Brand` и `BrandSource`, аддитивные nullable-поля в `Brief`
 (`brand_id`, `raw_input_text`, `input_summary_json`, `is_input_summary_verified`,
-`structured_brief_json`, `clarifications_json`) и эндпоинты `/api/brands` + freeform-операции
-под `/api/briefs/{id}/…`. `internet`, `transcript`, `BrandSource` — архитектурные заделы;
-web search / audio / загрузки файлов в MVP нет. Старый wizard-flow сохранён без изменений.
-Подробности и ручная проверка обоих flow — в [docs/brand-aware-flow.md](docs/brand-aware-flow.md).
+`structured_brief_json`, `clarifications_json`, `selected_template_json`,
+`reference_template_text`) и эндпоинты `/api/brands` + freeform-операции под
+`/api/briefs/{id}/…`. **Template layer** (структура итогового брифа на уровне брифа) —
+эндпоинты `GET /api/briefs/template/default`, `POST /api/briefs/template/decompose`,
+`POST /api/briefs/{id}/select-template`; хранится в `selected_template_json` (JSONB), при
+отсутствии — fallback на дефолтную структуру (старые freeform-брифы работают как раньше).
+`internet`, `transcript`, `BrandSource` — архитектурные заделы; web search / audio / загрузки
+файлов в MVP нет. Старый wizard-flow сохранён без изменений. Подробности и ручная проверка
+обоих flow — в [docs/brand-aware-flow.md](docs/brand-aware-flow.md).
 
 ## Маршруты frontend
 
@@ -282,7 +292,7 @@ web search / audio / загрузки файлов в MVP нет. Старый w
 - Backend: модель брифа + версии + lifecycle, CRUD, LLM-слой, экспорт, hash/outdated —
   покрыты no-DB pytest-смоком; `ruff check` чистый.
 - Frontend: wizard + Live brief + документный рендер + AI-блок; `tsc -b` + `vite build` зелёные.
-- Docker: полный стек собирается и проверен (health, Swagger, миграции `0004 (head)`, CRUD-smoke,
+- Docker: полный стек собирается и проверен (health, Swagger, миграции `0005 (head)`, CRUD-smoke,
   реальная генерация через OpenAI). Compose — dev-профиль; production-профиль см. deploy-plan.
 - Git: репозиторий инициализирован, `.gitignore` усилен (секреты и кэши исключены).
 
