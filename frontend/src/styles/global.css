@@ -1907,3 +1907,88 @@ a {
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
 }
+
+/* --- output brief template editor --- */
+.template-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.template-mode__opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.template-ref {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.template-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.template-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-12);
+  background: var(--surface-solid);
+  padding: 12px 14px;
+}
+
+.template-section--off {
+  opacity: 0.55;
+}
+
+.template-section__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.template-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0 24px;
+}
+
+.template-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.template-required {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+}
+
+.template-ref-details {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.template-ref-details summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}

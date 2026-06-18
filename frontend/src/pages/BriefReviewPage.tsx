@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import type { Brief, ClarificationImportance } from '../api/types'
+import type { Brief, BriefTemplate, ClarificationImportance } from '../api/types'
 import { api, ApiError } from '../api/client'
 import MarkdownView from '../components/MarkdownView'
 import SourceBadge from '../components/SourceBadge'
 import StatusBadge from '../components/StatusBadge'
+import TemplateEditor from '../components/TemplateEditor'
 
 const IMPORTANCE_ORDER: ClarificationImportance[] = ['critical', 'recommended', 'optional']
 const IMPORTANCE_LABELS: Record<ClarificationImportance, string> = {
@@ -47,6 +48,7 @@ export default function BriefReviewPage() {
   const [busy, setBusy] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [copied, setCopied] = useState(false)
+  const [templateDraft, setTemplateDraft] = useState<BriefTemplate | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -57,6 +59,10 @@ export default function BriefReviewPage() {
       .catch((e) => setLoadError((e as Error).message))
       .finally(() => setLoading(false))
   }, [id])
+
+  useEffect(() => {
+    setTemplateDraft(brief?.selected_template_json ?? null)
+  }, [brief])
 
   if (loading) {
     return (
@@ -89,6 +95,17 @@ export default function BriefReviewPage() {
       setBusy(null)
     }
   }
+
+  const saveTemplate = () => {
+    if (!templateDraft) return
+    run('save-template', () => api.selectTemplate(brief.id, { template: templateDraft }))
+  }
+
+  const useDefaultTemplate = () =>
+    run('save-template', async () => {
+      const tpl = await api.getDefaultTemplate()
+      return api.selectTemplate(brief.id, { template: tpl })
+    })
 
   const summary = brief.input_summary_json
   const structured = brief.structured_brief_json
@@ -154,6 +171,50 @@ export default function BriefReviewPage() {
       </div>
 
       {error && <div className="form-error">{error}</div>}
+
+      {/* 0. Структура итогового брифа */}
+      <section className="card review-section">
+        <h3>Структура итогового брифа</h3>
+        {templateDraft ? (
+          <>
+            <TemplateEditor
+              template={templateDraft}
+              onChange={setTemplateDraft}
+              disabled={busy !== null}
+            />
+            <div className="review-actions">
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={saveTemplate}
+                disabled={busy !== null}
+              >
+                {busy === 'save-template' ? 'Сохраняем…' : 'Сохранить структуру'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="review-actions">
+            <p className="review-muted">
+              Структура не выбрана — по умолчанию используется стандартная.
+            </p>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={useDefaultTemplate}
+              disabled={busy !== null}
+            >
+              {busy === 'save-template' ? '…' : 'Использовать стандартную структуру'}
+            </button>
+          </div>
+        )}
+        {brief.reference_template_text && (
+          <details className="template-ref-details">
+            <summary>Референс структуры</summary>
+            <pre className="review-raw">{brief.reference_template_text}</pre>
+          </details>
+        )}
+      </section>
 
       {/* Raw input */}
       <section className="card review-section">
