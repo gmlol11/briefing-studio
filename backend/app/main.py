@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.routers import briefs
+from app.routers import brand_briefs, brands, briefs
 from app.services.llm_service import LLMError, LLMNotConfiguredError, LLMTimeoutError
 
 settings = get_settings()
@@ -22,6 +22,8 @@ app.add_middleware(
 )
 
 app.include_router(briefs.router)
+app.include_router(brands.router)
+app.include_router(brand_briefs.router)
 
 
 @app.exception_handler(LLMNotConfiguredError)

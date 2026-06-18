@@ -142,6 +142,13 @@ class BriefRead(BaseModel):
     generated_markdown: str | None = None
     generated_from_context_hash: str | None = None
     is_generated_outdated: bool = False
+    # brand-aware freeform flow (additive; null/false для wizard-брифов)
+    brand_id: int | None = None
+    raw_input_text: str | None = None
+    input_summary_json: dict[str, Any] | None = None
+    is_input_summary_verified: bool = False
+    structured_brief_json: dict[str, Any] | None = None
+    clarifications_json: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -157,6 +164,7 @@ class BriefListItem(BaseModel):
     brief_type: BriefType
     current_step: str
     is_generated_outdated: bool = False
+    brand_id: int | None = None
     created_at: datetime
     updated_at: datetime
 

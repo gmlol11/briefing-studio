@@ -62,14 +62,21 @@ export default function BriefsListPage() {
 
       {briefs && briefs.length > 0 && (
         <ul className="briefs-list">
-          {briefs.map((b) => (
+          {briefs.map((b) => {
+            const isFreeform = b.brand_id != null
+            return (
             <li key={b.id} className="card brief-row">
-              <Link to={`/brief/${b.id}`} className="brief-row__main">
+              <Link
+                to={isFreeform ? `/brief/${b.id}/review` : `/brief/${b.id}`}
+                className="brief-row__main"
+              >
                 <span className="brief-row__title">{b.title || 'Без названия'}</span>
                 <span className="brief-row__meta">
-                  {BRIEF_TYPE_LABELS[b.brief_type]} · обновлён {formatDate(b.updated_at)}
+                  {isFreeform ? 'Brand-aware' : BRIEF_TYPE_LABELS[b.brief_type]} · обновлён{' '}
+                  {formatDate(b.updated_at)}
                 </span>
               </Link>
+              {isFreeform && <span className="badge badge--freeform">Freeform</span>}
               {b.is_generated_outdated && (
                 <span className="badge badge--outdated">Требует перегенерации</span>
               )}
@@ -83,7 +90,8 @@ export default function BriefsListPage() {
                 Удалить
               </button>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </div>

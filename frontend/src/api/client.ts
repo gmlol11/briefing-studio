@@ -1,4 +1,9 @@
 import type {
+  ApplyClarificationsPayload,
+  Brand,
+  BrandCreatePayload,
+  BrandListItem,
+  BrandUpdatePayload,
   Brief,
   BriefAnalysis,
   BriefContextUpdate,
@@ -6,6 +11,7 @@ import type {
   BriefListItem,
   BriefUpdatePayload,
   BriefVersion,
+  FreeformBriefCreatePayload,
   SectionRegenerateResponse,
 } from './types'
 
@@ -94,4 +100,52 @@ export const api = {
 
   exportBrief: (id: number | string, format: 'markdown' | 'json') =>
     download(`/api/briefs/${id}/export/${format}`),
+
+  // --- brands ---
+  listBrands: () => request<BrandListItem[]>('/api/brands'),
+
+  createBrand: (data: BrandCreatePayload) =>
+    request<Brand>('/api/brands', { method: 'POST', body: JSON.stringify(data) }),
+
+  getBrand: (id: number | string) => request<Brand>(`/api/brands/${id}`),
+
+  updateBrand: (id: number | string, data: BrandUpdatePayload) =>
+    request<Brand>(`/api/brands/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  deleteBrand: (id: number | string) =>
+    request<void>(`/api/brands/${id}`, { method: 'DELETE' }),
+
+  // --- brand-aware freeform brief flow ---
+  createFreeformBrief: (data: FreeformBriefCreatePayload) =>
+    request<Brief>('/api/briefs/freeform', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  setFreeformInput: (id: number | string, raw_input_text: string) =>
+    request<Brief>(`/api/briefs/${id}/freeform-input`, {
+      method: 'POST',
+      body: JSON.stringify({ raw_input_text }),
+    }),
+
+  summarizeInput: (id: number | string) =>
+    request<Brief>(`/api/briefs/${id}/summarize-input`, { method: 'POST' }),
+
+  verifyInputSummary: (id: number | string) =>
+    request<Brief>(`/api/briefs/${id}/verify-input-summary`, { method: 'POST' }),
+
+  structureBrief: (id: number | string) =>
+    request<Brief>(`/api/briefs/${id}/structure`, { method: 'POST' }),
+
+  generateClarifications: (id: number | string) =>
+    request<Brief>(`/api/briefs/${id}/clarifications`, { method: 'POST' }),
+
+  applyClarifications: (id: number | string, data: ApplyClarificationsPayload) =>
+    request<Brief>(`/api/briefs/${id}/apply-clarifications`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  generateFinalBrief: (id: number | string) =>
+    request<Brief>(`/api/briefs/${id}/generate-final`, { method: 'POST' }),
 }

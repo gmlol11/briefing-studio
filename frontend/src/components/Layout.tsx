@@ -17,6 +17,7 @@ export default function Layout() {
               Главная
             </NavLink>
             <NavLink to="/briefs">Брифы</NavLink>
+            <NavLink to="/brands">Бренды</NavLink>
             <NavLink to="/brief/new">Новый бриф</NavLink>
           </nav>
           <NavLink to="/brief/new" className="btn btn--primary header-cta">
