@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import type { Brief } from '../api/types'
 import { api } from '../api/client'
 import BriefWizard from '../components/BriefWizard'
@@ -40,6 +40,16 @@ export default function BriefEditPage() {
         </Link>
       </div>
     )
+  }
+
+  // brand-aware freeform-брифы открываются в review-экране, а не в wizard.
+  // Redirect стабилен: /brief/:id/review — отдельный роут, обратно не редиректит.
+  const isFreeform =
+    brief.brand_id != null ||
+    !!brief.raw_input_text ||
+    brief.structured_brief_json != null
+  if (isFreeform) {
+    return <Navigate to={`/brief/${brief.id}/review`} replace />
   }
 
   // key={brief.id} — пересоздаём wizard при смене брифа

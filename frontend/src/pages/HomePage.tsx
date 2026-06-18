@@ -30,24 +30,38 @@ export default function HomePage() {
           <Link to="/brief/new" className="btn btn--primary">
             Создать бриф
           </Link>
+          <Link to="/brands" className="btn btn--ghost">
+            Бренды
+          </Link>
           <Link to="/briefs" className="btn btn--ghost">
             Мои брифы
           </Link>
         </div>
       </section>
 
+      <h2 className="section-title">
+        Два способа <b>создать бриф</b>
+      </h2>
       <section className="features">
         <div className="card">
           <h3>Пошаговый wizard</h3>
-          <p>Последовательные вопросы вместо пустого документа.</p>
+          <p>
+            Ручное пошаговое заполнение: 8 шагов по полям брифа, затем AI-анализ и
+            генерация документа.
+          </p>
+          <Link to="/brief/new" className="btn btn--primary">
+            Создать по шагам
+          </Link>
         </div>
         <div className="card">
-          <h3>Структура из коробки</h3>
-          <p>Цели, сообщения, тональность и результат — ничего не потеряется.</p>
-        </div>
-        <div className="card">
-          <h3>AI-генерация</h3>
-          <p>Готовый markdown-бриф, анализ полноты и версии генераций.</p>
+          <h3>AI-бриф из свободного ввода</h3>
+          <p>
+            Вставьте клиентский текст/заметки → AI делает summary и структуру с
+            источниками → уточнения → финальный бриф. Нужен бренд.
+          </p>
+          <Link to="/brief/new/freeform" className="btn btn--primary">
+            Создать AI-бриф из свободного ввода
+          </Link>
         </div>
       </section>
 
