@@ -27,6 +27,9 @@ def _payload(brief: Brief, **extra: Any) -> dict[str, Any]:
         "raw_input_text": brief.raw_input_text or "",
         "input_summary_json": brief.input_summary_json or {},
         "structured_brief_json": brief.structured_brief_json or {},
+        # Шаблон передаётся как есть: None у старых брифов без структуры → промпт
+        # уходит в fallback-ветку и сохраняет прежнее поведение (default НЕ подставляем).
+        "selected_template_json": brief.selected_template_json,
     }
     base.update(extra)
     return base

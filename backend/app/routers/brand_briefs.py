@@ -204,6 +204,22 @@ def generate_final(brief_id: int, db: Session = Depends(get_db)) -> Brief:
 
     markdown = brand_brief_service.generate_final_brief(brief)
 
+    # Snapshot: с шаблоном — {structured, template}; без него — прежний формат
+    # (только structured_brief_json), чтобы не сломать старые версии/ожидания.
+    template = brief.selected_template_json
+    snapshot = (
+        {"structured": brief.structured_brief_json, "template": template}
+        if template is not None
+        else brief.structured_brief_json
+    )
+    meta: dict = {
+        "model": get_settings().llm_model,
+        "generation_type": "brand_freeform",
+        "source": "generate_final_endpoint",
+    }
+    if template is not None:
+        meta["template_source"] = template.get("source")
+
     max_version = db.scalar(
         select(func.max(BriefVersion.version_number)).where(
             BriefVersion.brief_id == brief.id
@@ -214,17 +230,14 @@ def generate_final(brief_id: int, db: Session = Depends(get_db)) -> Brief:
             brief_id=brief.id,
             version_number=(max_version or 0) + 1,
             generated_markdown=markdown,
-            context_snapshot_json=brief.structured_brief_json,
-            generation_meta_json={
-                "model": get_settings().llm_model,
-                "generation_type": "brand_freeform",
-                "source": "generate_final_endpoint",
-            },
+            context_snapshot_json=snapshot,
+            generation_meta_json=meta,
         )
     )
     brief.generated_markdown = markdown
     brief.status = "generated"
-    brief.generated_from_context_hash = context_hash(brief.structured_brief_json or {})
+    # hash от того же источника, что и is_generated_outdated (structured [+ template])
+    brief.generated_from_context_hash = context_hash(brief.generated_hash_source())
     db.commit()
     db.refresh(brief)
     return brief

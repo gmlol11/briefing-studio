@@ -161,20 +161,29 @@ class Brief(Base):
     )
     brand: Mapped["Brand | None"] = relationship(back_populates="briefs")
 
+    def generated_hash_source(self) -> dict[str, Any]:
+        """Источник для context_hash и is_generated_outdated.
+
+        - Wizard (`structured_brief_json is None`) — `context_json` (без изменений).
+        - Freeform без шаблона — только `structured_brief_json` (прежнее поведение).
+        - Freeform с `selected_template_json` — `{structured, template}`, чтобы
+          изменение шаблона после генерации делало бриф устаревшим.
+        """
+        if self.structured_brief_json is None:
+            return self.context_json or {}
+        if self.selected_template_json is not None:
+            return {
+                "structured": self.structured_brief_json,
+                "template": self.selected_template_json,
+            }
+        return self.structured_brief_json
+
     @property
     def is_generated_outdated(self) -> bool:
-        """Контекст изменился после последней генерации markdown.
-
-        Для freeform-брифа источником служит structured_brief_json (если задан),
-        иначе — context_json (поведение wizard-флоу не меняется)."""
+        """Источник брифа изменился после последней генерации markdown."""
         if not self.generated_markdown or not self.generated_from_context_hash:
             return False
-        source = (
-            self.structured_brief_json
-            if self.structured_brief_json is not None
-            else (self.context_json or {})
-        )
-        return context_hash(source) != self.generated_from_context_hash
+        return context_hash(self.generated_hash_source()) != self.generated_from_context_hash
 
 
 class BriefVersion(Base):
