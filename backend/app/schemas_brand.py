@@ -165,3 +165,63 @@ class ApplyClarificationsRequest(BaseModel):
     answers: list[ClarificationAnswer] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
+
+
+# --- output brief template ------------------------------------------------
+# Структура итогового брифа на уровне конкретного Brief (selected_template_json).
+# Та же схема описывает и вывод AI-декомпозиции референса, и сохранённый выбор
+# пользователя (флаги `selected`).
+
+
+class TemplateSource(str, Enum):
+    default = "default"
+    reference = "reference"
+    custom = "custom"
+
+
+class TemplateField(BaseModel):
+    """Поле раздела шаблона. `key` совпадает с ключом StructuredField."""
+
+    key: str = ""
+    label: str = ""
+    selected: bool = True
+    required: bool = False
+    hint: str = ""
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class TemplateSection(BaseModel):
+    key: str = ""
+    title: str = ""
+    description: str = ""
+    selected: bool = True
+    fields: list[TemplateField] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class BriefTemplate(BaseModel):
+    name: str = ""
+    source: TemplateSource = TemplateSource.default
+    sections: list[TemplateSection] = Field(default_factory=list)
+
+    model_config = ConfigDict(extra="ignore")
+
+
+class DecomposeTemplateRequest(BaseModel):
+    """Декомпозиция референс-текста в структуру итогового брифа (AI, stateless)."""
+
+    reference_text: str = Field(min_length=1)
+    brand_id: int | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SelectTemplateRequest(BaseModel):
+    """Сохранение выбранной структуры в конкретный Brief."""
+
+    template: BriefTemplate
+    reference_text: str | None = None
+
+    model_config = ConfigDict(extra="forbid")

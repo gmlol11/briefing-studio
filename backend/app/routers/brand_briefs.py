@@ -14,9 +14,12 @@ from app.models import Brand, Brief, BriefVersion, default_context
 from app.schemas import BriefRead
 from app.schemas_brand import (
     ApplyClarificationsRequest,
+    BriefTemplate,
+    DecomposeTemplateRequest,
     FieldStatus,
     FreeformBriefCreate,
     FreeformInputRequest,
+    SelectTemplateRequest,
     StructuredBrief,
 )
 from app.services import brand_brief_service
@@ -56,6 +59,47 @@ def create_freeform_brief(
         context_json=default_context(),
     )
     db.add(brief)
+    db.commit()
+    db.refresh(brief)
+    return brief
+
+
+# --- output template (структура итогового брифа) ---
+# Статические /template/* объявлены до параметрических /{brief_id}/* маршрутов.
+
+
+@router.get("/template/default", response_model=BriefTemplate)
+def get_default_template() -> dict:
+    """Дефолтная структура итогового брифа (без LLM)."""
+    return brand_brief_service.get_default_brief_template()
+
+
+@router.post("/template/decompose", response_model=BriefTemplate)
+def decompose_template(
+    payload: DecomposeTemplateRequest, db: Session = Depends(get_db)
+) -> dict:
+    """AI-декомпозиция референс-текста в структуру итогового брифа (stateless)."""
+    brand_ctx = None
+    if payload.brand_id is not None:
+        brand = db.get(Brand, payload.brand_id)
+        if brand is None:
+            raise HTTPException(status_code=404, detail="Бренд не найден")
+        brand_ctx = brand.brand_context_json
+    return brand_brief_service.decompose_reference_template(
+        payload.reference_text, brand_ctx
+    )
+
+
+@router.post("/{brief_id}/select-template", response_model=BriefRead)
+def select_template(
+    brief_id: int, payload: SelectTemplateRequest, db: Session = Depends(get_db)
+) -> Brief:
+    """Сохранить выбранную структуру итогового брифа в бриф."""
+    brief = _get_brief_or_404(brief_id, db)
+    # template уже провалидирован Pydantic при разборе тела запроса
+    brief.selected_template_json = payload.template.model_dump(mode="json")
+    if payload.reference_text is not None:
+        brief.reference_template_text = payload.reference_text
     db.commit()
     db.refresh(brief)
     return brief
@@ -160,6 +204,22 @@ def generate_final(brief_id: int, db: Session = Depends(get_db)) -> Brief:
 
     markdown = brand_brief_service.generate_final_brief(brief)
 
+    # Snapshot: с шаблоном — {structured, template}; без него — прежний формат
+    # (только structured_brief_json), чтобы не сломать старые версии/ожидания.
+    template = brief.selected_template_json
+    snapshot = (
+        {"structured": brief.structured_brief_json, "template": template}
+        if template is not None
+        else brief.structured_brief_json
+    )
+    meta: dict = {
+        "model": get_settings().llm_model,
+        "generation_type": "brand_freeform",
+        "source": "generate_final_endpoint",
+    }
+    if template is not None:
+        meta["template_source"] = template.get("source")
+
     max_version = db.scalar(
         select(func.max(BriefVersion.version_number)).where(
             BriefVersion.brief_id == brief.id
@@ -170,17 +230,14 @@ def generate_final(brief_id: int, db: Session = Depends(get_db)) -> Brief:
             brief_id=brief.id,
             version_number=(max_version or 0) + 1,
             generated_markdown=markdown,
-            context_snapshot_json=brief.structured_brief_json,
-            generation_meta_json={
-                "model": get_settings().llm_model,
-                "generation_type": "brand_freeform",
-                "source": "generate_final_endpoint",
-            },
+            context_snapshot_json=snapshot,
+            generation_meta_json=meta,
         )
     )
     brief.generated_markdown = markdown
     brief.status = "generated"
-    brief.generated_from_context_hash = context_hash(brief.structured_brief_json or {})
+    # hash от того же источника, что и is_generated_outdated (structured [+ template])
+    brief.generated_from_context_hash = context_hash(brief.generated_hash_source())
     db.commit()
     db.refresh(brief)
     return brief

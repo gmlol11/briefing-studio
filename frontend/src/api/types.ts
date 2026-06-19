@@ -59,6 +59,9 @@ export interface Brief {
   is_input_summary_verified: boolean
   structured_brief_json: StructuredBrief | null
   clarifications_json: Clarifications | null
+  // output template (additive; null для wizard и freeform-брифов без шаблона)
+  selected_template_json?: BriefTemplate | null
+  reference_template_text?: string | null
   created_at: string
   updated_at: string
 }
@@ -229,4 +232,40 @@ export interface ClarificationAnswer {
 
 export interface ApplyClarificationsPayload {
   answers: ClarificationAnswer[]
+}
+
+// --- output brief template ------------------------------------------------
+
+export type TemplateSource = 'default' | 'reference' | 'custom'
+
+export interface TemplateField {
+  key: string
+  label: string
+  selected: boolean
+  required: boolean
+  hint: string
+}
+
+export interface TemplateSection {
+  key: string
+  title: string
+  description: string
+  selected: boolean
+  fields: TemplateField[]
+}
+
+export interface BriefTemplate {
+  name: string
+  source: TemplateSource
+  sections: TemplateSection[]
+}
+
+export interface DecomposeTemplateRequest {
+  reference_text: string
+  brand_id?: number | null
+}
+
+export interface SelectTemplatePayload {
+  template: BriefTemplate
+  reference_text?: string | null
 }

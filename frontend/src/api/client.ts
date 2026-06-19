@@ -9,10 +9,13 @@ import type {
   BriefContextUpdate,
   BriefCreatePayload,
   BriefListItem,
+  BriefTemplate,
   BriefUpdatePayload,
   BriefVersion,
+  DecomposeTemplateRequest,
   FreeformBriefCreatePayload,
   SectionRegenerateResponse,
+  SelectTemplatePayload,
 } from './types'
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').replace(/\/$/, '')
@@ -148,4 +151,19 @@ export const api = {
 
   generateFinalBrief: (id: number | string) =>
     request<Brief>(`/api/briefs/${id}/generate-final`, { method: 'POST' }),
+
+  // --- output brief template ---
+  getDefaultTemplate: () => request<BriefTemplate>('/api/briefs/template/default'),
+
+  decomposeTemplate: (data: DecomposeTemplateRequest) =>
+    request<BriefTemplate>('/api/briefs/template/decompose', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  selectTemplate: (id: number | string, data: SelectTemplatePayload) =>
+    request<Brief>(`/api/briefs/${id}/select-template`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 }

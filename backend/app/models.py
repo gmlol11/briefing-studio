@@ -50,6 +50,54 @@ def default_context() -> dict[str, Any]:
     }
 
 
+def default_template() -> dict[str, Any]:
+    """Дефолтная структура итогового freeform-брифа.
+
+    Зеркалит разделы текущего финального промпта (generate_final_brand_brief):
+    разделы документа + ключи структурированных полей, которые их наполняют.
+    Используется как fallback, если у брифа нет selected_template_json.
+    """
+
+    def _field(key: str, label: str, *, required: bool = False) -> dict[str, Any]:
+        return {"key": key, "label": label, "selected": True, "required": required, "hint": ""}
+
+    def _section(
+        key: str, title: str, fields: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        return {"key": key, "title": title, "description": "", "selected": True, "fields": fields}
+
+    return {
+        "name": "Коммуникационный бриф (по умолчанию)",
+        "source": "default",
+        "sections": [
+            _section("context", "Контекст и бренд", []),
+            _section("goal", "Главная цель", [_field("main_goal", "Главная цель", required=True)]),
+            _section(
+                "audience",
+                "Целевая аудитория",
+                [_field("target_audience", "Целевая аудитория", required=True)],
+            ),
+            _section(
+                "key_message",
+                "Ключевое сообщение",
+                [_field("key_message", "Ключевое сообщение", required=True)],
+            ),
+            _section(
+                "tone", "Тональность (Tone of Voice)", [_field("tone_of_voice", "Тональность")]
+            ),
+            _section(
+                "object", "Объект продвижения", [_field("product_or_object", "Объект продвижения")]
+            ),
+            _section("channels", "Каналы коммуникации", [_field("channels", "Каналы")]),
+            _section("mandatories", "Обязательно (Mandatories)", [_field("mandatories", "Mandatories")]),
+            _section("restrictions", "Ограничения (Don'ts)", [_field("restrictions", "Ограничения")]),
+            _section("deliverables", "Deliverables", [_field("deliverables", "Deliverables")]),
+            _section("kpi", "KPI", [_field("kpi", "KPI")]),
+            _section("assumptions", "Допущения и открытые вопросы", []),
+        ],
+    }
+
+
 class Brief(Base):
     """Доменная модель брифа."""
 
@@ -87,6 +135,14 @@ class Brief(Base):
         JSONB, nullable=True
     )
 
+    # --- output template (additive, nullable; freeform-only) ---
+    # Старый wizard-flow и freeform-брифы без шаблона эти поля не используют
+    # (остаются NULL → fallback на дефолтную структуру).
+    reference_template_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selected_template_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -105,20 +161,29 @@ class Brief(Base):
     )
     brand: Mapped["Brand | None"] = relationship(back_populates="briefs")
 
+    def generated_hash_source(self) -> dict[str, Any]:
+        """Источник для context_hash и is_generated_outdated.
+
+        - Wizard (`structured_brief_json is None`) — `context_json` (без изменений).
+        - Freeform без шаблона — только `structured_brief_json` (прежнее поведение).
+        - Freeform с `selected_template_json` — `{structured, template}`, чтобы
+          изменение шаблона после генерации делало бриф устаревшим.
+        """
+        if self.structured_brief_json is None:
+            return self.context_json or {}
+        if self.selected_template_json is not None:
+            return {
+                "structured": self.structured_brief_json,
+                "template": self.selected_template_json,
+            }
+        return self.structured_brief_json
+
     @property
     def is_generated_outdated(self) -> bool:
-        """Контекст изменился после последней генерации markdown.
-
-        Для freeform-брифа источником служит structured_brief_json (если задан),
-        иначе — context_json (поведение wizard-флоу не меняется)."""
+        """Источник брифа изменился после последней генерации markdown."""
         if not self.generated_markdown or not self.generated_from_context_hash:
             return False
-        source = (
-            self.structured_brief_json
-            if self.structured_brief_json is not None
-            else (self.context_json or {})
-        )
-        return context_hash(source) != self.generated_from_context_hash
+        return context_hash(self.generated_hash_source()) != self.generated_from_context_hash
 
 
 class BriefVersion(Base):

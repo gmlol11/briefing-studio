@@ -8,8 +8,9 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.models import Brief
+from app.models import Brief, default_template
 from app.schemas_brand import (
+    BriefTemplate,
     Clarifications,
     InputSummary,
     StructuredBrief,
@@ -26,6 +27,9 @@ def _payload(brief: Brief, **extra: Any) -> dict[str, Any]:
         "raw_input_text": brief.raw_input_text or "",
         "input_summary_json": brief.input_summary_json or {},
         "structured_brief_json": brief.structured_brief_json or {},
+        # Шаблон передаётся как есть: None у старых брифов без структуры → промпт
+        # уходит в fallback-ветку и сохраняет прежнее поведение (default НЕ подставляем).
+        "selected_template_json": brief.selected_template_json,
     }
     base.update(extra)
     return base
@@ -75,3 +79,22 @@ def generate_final_brief(brief: Brief) -> str:
     return get_llm_service().chat_markdown(
         get_prompt("generate_final_brand_brief"), _payload(brief)
     )
+
+
+def get_default_brief_template() -> dict[str, Any]:
+    """Дефолтная структура итогового брифа (без LLM), валидированная схемой."""
+    return BriefTemplate.model_validate(default_template()).model_dump(mode="json")
+
+
+def decompose_reference_template(
+    reference_text: str, brand_context_json: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """AI-декомпозиция референс-текста в BriefTemplate (только структура)."""
+    raw = get_llm_service().chat_json(
+        get_prompt("decompose_template"),
+        {
+            "reference_text": reference_text,
+            "brand_context_json": brand_context_json or {},
+        },
+    )
+    return _validate(BriefTemplate, raw, "структуру шаблона")

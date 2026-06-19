@@ -51,8 +51,39 @@ def test_pre_generated_briefs_have_versions_and_consistent_hash(db_session):
     ).one()
     assert freeform.brand_id is not None
     assert len(freeform.versions) == 1
-    # freeform hashes its structured_brief_json source → not outdated
+    # template-aware freeform hashes structured + template → not outdated
     assert freeform.generated_from_context_hash == context_hash(
-        freeform.structured_brief_json
+        freeform.generated_hash_source()
     )
     assert freeform.is_generated_outdated is False
+
+
+def test_freeform_demo_briefs_have_templates(db_session):
+    from app.models import Brief
+
+    seed_demo.seed(db_session)
+
+    review = db_session.query(Brief).filter_by(
+        title=seed_demo.FREEFORM_REVIEW_TITLE
+    ).one()
+    assert review.selected_template_json["source"] == "default"
+
+    gen = db_session.query(Brief).filter_by(
+        title=seed_demo.FREEFORM_GENERATED_TITLE
+    ).one()
+    assert gen.selected_template_json["source"] == "reference"
+    assert gen.reference_template_text
+
+
+def test_pre_generated_freeform_snapshot_has_structured_and_template(db_session):
+    from app.models import Brief
+
+    seed_demo.seed(db_session)
+
+    gen = db_session.query(Brief).filter_by(
+        title=seed_demo.FREEFORM_GENERATED_TITLE
+    ).one()
+    snapshot = gen.versions[0].context_snapshot_json
+    assert set(snapshot.keys()) == {"structured", "template"}
+    assert snapshot["template"]["source"] == "reference"
+    assert gen.versions[0].generation_meta_json.get("template_source") == "reference"

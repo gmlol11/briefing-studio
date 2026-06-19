@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Link } from 'react-router-dom'
-import type { BrandListItem } from '../api/types'
+import type { BrandListItem, BriefTemplate } from '../api/types'
 import { api, ApiError } from '../api/client'
+import TemplateEditor from '../components/TemplateEditor'
 
 const LLM_NOT_CONFIGURED =
   'LLM пока не настроена. Бриф создан, summary можно собрать позже. Добавьте LLM_API_KEY, LLM_BASE_URL и LLM_MODEL в .env.'
 
-/** Создание brand-aware freeform-брифа из свободного текста. */
+type TemplateMode = 'default' | 'reference'
+
+/** Создание brand-aware freeform-брифа: бренд → структура итогового брифа → свободный текст. */
 export default function FreeformNewBriefPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -18,21 +21,72 @@ export default function FreeformNewBriefPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
+  // структура итогового брифа
+  const [defaultTemplate, setDefaultTemplate] = useState<BriefTemplate | null>(null)
+  const [template, setTemplate] = useState<BriefTemplate | null>(null)
+  const [templateError, setTemplateError] = useState<string | null>(null)
+  const [mode, setMode] = useState<TemplateMode>('default')
+  const [referenceText, setReferenceText] = useState('')
+  const [decomposing, setDecomposing] = useState(false)
+
   useEffect(() => {
     api
       .listBrands()
       .then((list) => {
         setBrands(list)
-        // если бренд не задан query-параметром — предвыбрать первый доступный
         setBrandId((cur) => cur || (list.length ? String(list[0].id) : ''))
       })
       .catch((e) => setError((e as Error).message))
   }, [])
 
+  useEffect(() => {
+    api
+      .getDefaultTemplate()
+      .then((tpl) => {
+        setDefaultTemplate(tpl)
+        setTemplate(tpl)
+      })
+      .catch(() =>
+        setTemplateError('Не удалось загрузить структуру по умолчанию. Обновите страницу.'),
+      )
+  }, [])
+
+  const switchMode = (next: TemplateMode) => {
+    setMode(next)
+    setTemplateError(null)
+    if (next === 'default' && defaultTemplate) setTemplate(defaultTemplate)
+  }
+
+  const decompose = async () => {
+    setTemplateError(null)
+    if (!referenceText.trim()) {
+      setTemplateError('Вставьте текст-референс структуры.')
+      return
+    }
+    setDecomposing(true)
+    try {
+      const tpl = await api.decomposeTemplate({
+        reference_text: referenceText,
+        brand_id: brandId ? Number(brandId) : null,
+      })
+      setTemplate(tpl)
+    } catch (e) {
+      setTemplateError(
+        e instanceof ApiError && e.status === 503 ? LLM_NOT_CONFIGURED : (e as Error).message,
+      )
+    } finally {
+      setDecomposing(false)
+    }
+  }
+
   const submit = async () => {
     setError(null)
     if (!brandId) {
       setError('Выберите бренд.')
+      return
+    }
+    if (!template) {
+      setError('Структура итогового брифа не загружена.')
       return
     }
     if (!rawInput.trim()) {
@@ -43,9 +97,11 @@ export default function FreeformNewBriefPage() {
     try {
       const title = rawInput.trim().split('\n')[0].slice(0, 60) || undefined
       const brief = await api.createFreeformBrief({ brand_id: Number(brandId), title })
-      // backend create не сохраняет raw input сам — сохраняем отдельно
+      await api.selectTemplate(brief.id, {
+        template,
+        reference_text: mode === 'reference' ? referenceText : null,
+      })
       await api.setFreeformInput(brief.id, rawInput)
-      // best-effort: summary можно пересобрать на review-экране, если здесь не вышло
       try {
         await api.summarizeInput(brief.id)
       } catch (e) {
@@ -89,6 +145,62 @@ export default function FreeformNewBriefPage() {
                 ))}
               </select>
             </div>
+
+            {/* Структура итогового брифа */}
+            <div className="field">
+              <label>Структура итогового брифа</label>
+              <div className="template-mode">
+                <label className="template-mode__opt">
+                  <input
+                    type="radio"
+                    name="tpl-mode"
+                    checked={mode === 'default'}
+                    onChange={() => switchMode('default')}
+                  />
+                  Стандартная структура
+                </label>
+                <label className="template-mode__opt">
+                  <input
+                    type="radio"
+                    name="tpl-mode"
+                    checked={mode === 'reference'}
+                    onChange={() => switchMode('reference')}
+                  />
+                  Из референса
+                </label>
+              </div>
+
+              {mode === 'reference' && (
+                <div className="template-ref">
+                  <textarea
+                    rows={6}
+                    value={referenceText}
+                    placeholder="Вставьте пример/референс структуры брифа…"
+                    onChange={(e) => setReferenceText(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={decompose}
+                    disabled={decomposing}
+                  >
+                    {decomposing ? 'Декомпозируем…' : 'Декомпозировать структуру'}
+                  </button>
+                </div>
+              )}
+
+              {templateError && <div className="form-error">{templateError}</div>}
+
+              {template ? (
+                <TemplateEditor template={template} onChange={setTemplate} disabled={busy} />
+              ) : (
+                !templateError && <p className="review-muted">Загружаем структуру…</p>
+              )}
+              <p className="field__hint">
+                Отметьте разделы и поля, которые должны попасть в итоговый бриф.
+              </p>
+            </div>
+
             <div className="field">
               <label htmlFor="ff-input">Свободный клиентский бриф</label>
               <textarea
@@ -99,7 +211,7 @@ export default function FreeformNewBriefPage() {
                 onChange={(e) => setRawInput(e.target.value)}
               />
               <p className="field__hint">
-                AI сделает summary, затем структурирует бриф с источниками и уточнениями.
+                AI сделает summary, затем структурирует бриф под выбранную структуру.
               </p>
             </div>
           </div>
@@ -119,7 +231,7 @@ export default function FreeformNewBriefPage() {
               type="button"
               className="btn btn--primary"
               onClick={submit}
-              disabled={busy || brands === null}
+              disabled={busy || brands === null || !template}
             >
               {busy ? 'Создаём…' : 'Создать и сделать summary'}
             </button>

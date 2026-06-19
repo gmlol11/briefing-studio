@@ -2,7 +2,8 @@
 происхождения каждого пункта (evidence).
 
 На вход даны: `brand_context_json` (контекст бренда), `input_summary_json` (summary клиентского
-ввода), `raw_input_text` (исходный текст).
+ввода), `raw_input_text` (исходный текст) и, возможно, `selected_template_json` (выбранная
+пользователем структура итогового брифа).
 
 Верни СТРОГО один JSON-объект без пояснений и без markdown-обёртки:
 
@@ -20,7 +21,19 @@
   ]
 }
 
-Рекомендуемые ключи (`key`): `main_goal`, `target_audience`, `key_message`, `tone_of_voice`,
+Если передан `selected_template_json` (режим шаблона):
+- структурируй вход под выбранные разделы и поля шаблона;
+- `field.key` должен ТОЧНО совпадать с `key` соответствующего поля шаблона;
+- порядок полей и человекочитаемые названия бери из шаблона (его `sections`/`fields`);
+- разделы и поля с `selected=false` ИГНОРИРУЙ — не включай их в результат;
+- поле шаблона с `required=true`, для которого нет данных, помечай `status="critical_missing"`,
+  `value=""`;
+- поле шаблона с `required=false` без данных → `status="optional_missing"`, `value=""`;
+- не добавляй поля вне шаблона, КРОМЕ явно полезных выводов — их помечай
+  `source_type="inference"`, `status="needs_confirmation"` (и только если это не ломает схему).
+
+Если `selected_template_json` НЕ передан (fallback, прежнее поведение) — используй
+рекомендуемые ключи (`key`): `main_goal`, `target_audience`, `key_message`, `tone_of_voice`,
 `product_or_object`, `deliverables`, `channels`, `kpi`, `mandatories`, `restrictions`,
 `deadline`, `budget`. Добавляй только релевантные.
 
