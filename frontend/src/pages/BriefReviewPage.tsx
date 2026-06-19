@@ -3,9 +3,11 @@ import { Link, useParams } from 'react-router-dom'
 import type { Brief, BriefTemplate, ClarificationImportance } from '../api/types'
 import { api, ApiError } from '../api/client'
 import MarkdownView from '../components/MarkdownView'
+import ReviewStepper from '../components/ReviewStepper'
 import SourceBadge from '../components/SourceBadge'
 import StatusBadge from '../components/StatusBadge'
 import TemplateEditor from '../components/TemplateEditor'
+import { deriveSteps, defaultActiveStep, type ReviewStepId } from '../review/steps'
 
 const IMPORTANCE_ORDER: ClarificationImportance[] = ['critical', 'recommended', 'optional']
 const IMPORTANCE_LABELS: Record<ClarificationImportance, string> = {
@@ -49,13 +51,17 @@ export default function BriefReviewPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [copied, setCopied] = useState(false)
   const [templateDraft, setTemplateDraft] = useState<BriefTemplate | null>(null)
+  const [activeStepId, setActiveStepId] = useState<ReviewStepId>('template')
 
   useEffect(() => {
     if (!id) return
     setLoading(true)
     api
       .getBrief(id)
-      .then(setBrief)
+      .then((b) => {
+        setBrief(b)
+        setActiveStepId(defaultActiveStep(deriveSteps(b, null)))
+      })
       .catch((e) => setLoadError((e as Error).message))
       .finally(() => setLoading(false))
   }, [id])
@@ -110,6 +116,7 @@ export default function BriefReviewPage() {
   const summary = brief.input_summary_json
   const structured = brief.structured_brief_json
   const clarifications = brief.clarifications_json
+  const steps = deriveSteps(brief, busy)
 
   const applyAnswers = () => {
     const questions = clarifications?.questions ?? []
@@ -169,6 +176,8 @@ export default function BriefReviewPage() {
           )}
         </div>
       </div>
+
+      <ReviewStepper steps={steps} activeId={activeStepId} onSelect={setActiveStepId} />
 
       {error && <div className="form-error">{error}</div>}
 

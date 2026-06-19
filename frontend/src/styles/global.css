@@ -1992,3 +1992,90 @@ a {
   cursor: pointer;
   color: var(--text-muted);
 }
+
+/* --- review stepper --- */
+.review-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.review-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.review-step:hover {
+  border-color: var(--accent-mild);
+}
+
+.review-step--active {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+  background: var(--accent-select);
+}
+
+.review-step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+  flex: none;
+}
+
+.review-step__title {
+  white-space: nowrap;
+}
+
+.review-step__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.review-step__status--done {
+  color: var(--success);
+}
+.review-step__status--needs_action {
+  color: var(--warn);
+  font-weight: 700;
+}
+.review-step__status--blocked {
+  filter: grayscale(0.2);
+}
+.review-step__status--ready {
+  color: var(--accent-text);
+}
+.review-step__status--processing {
+  color: var(--accent-text);
+}
+.review-step__status--empty {
+  color: var(--text-muted);
+}
+
+/* done-шаги слегка приглушены, активный всегда контрастный */
+.review-step--done:not(.review-step--active) .review-step__num {
+  background: var(--success-bg);
+  color: var(--success);
+}
