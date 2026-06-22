@@ -271,7 +271,8 @@ Brand-aware добавляет модели `Brand` и `BrandSource`, аддит
 - `/brief/:id` — wizard-редактор (freeform-брифы редиректятся на `/brief/:id/review`)
 - `/brands`, `/brands/new`, `/brands/:id` — управление брендами
 - `/brief/new/freeform` — создание brand-aware freeform-брифа
-- `/brief/:id/review` — review-экран freeform-флоу
+- `/brief/:id/review` — пошаговый review-экран freeform-флоу (stepper из 5 шагов, сводка
+  состояния и loaders для AI/API-действий)
 
 ## Документация
 

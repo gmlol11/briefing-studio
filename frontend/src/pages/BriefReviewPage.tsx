@@ -3,9 +3,30 @@ import { Link, useParams } from 'react-router-dom'
 import type { Brief, BriefTemplate, ClarificationImportance } from '../api/types'
 import { api, ApiError } from '../api/client'
 import MarkdownView from '../components/MarkdownView'
+import ProcessingState from '../components/ProcessingState'
+import ReviewStateSummary from '../components/ReviewStateSummary'
+import ReviewStepper from '../components/ReviewStepper'
 import SourceBadge from '../components/SourceBadge'
 import StatusBadge from '../components/StatusBadge'
+import StepPanel from '../components/StepPanel'
 import TemplateEditor from '../components/TemplateEditor'
+import {
+  deriveSteps,
+  defaultActiveStep,
+  stepIdForBusy,
+  type ReviewStepId,
+} from '../review/steps'
+
+/** Сообщения для ProcessingState по busy-ключу (export — лёгкий busy на кнопке, без панели). */
+const BUSY_MESSAGES: Record<string, string> = {
+  'save-template': 'Сохраняем структуру…',
+  summarize: 'Готовим summary…',
+  verify: 'Подтверждаем summary…',
+  structure: 'Структурируем бриф…',
+  clarify: 'Формируем уточняющие вопросы…',
+  apply: 'Применяем ответы…',
+  generate: 'Генерируем итоговый документ…',
+}
 
 const IMPORTANCE_ORDER: ClarificationImportance[] = ['critical', 'recommended', 'optional']
 const IMPORTANCE_LABELS: Record<ClarificationImportance, string> = {
@@ -38,7 +59,7 @@ function List({ items }: { items: string[] }) {
   )
 }
 
-/** Review-flow brand-aware брифа: summary → структура → уточнения → финал. */
+/** Review-flow brand-aware брифа: пошагово (структура → summary → структура → уточнения → финал). */
 export default function BriefReviewPage() {
   const { id } = useParams<{ id: string }>()
   const [brief, setBrief] = useState<Brief | null>(null)
@@ -49,13 +70,17 @@ export default function BriefReviewPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [copied, setCopied] = useState(false)
   const [templateDraft, setTemplateDraft] = useState<BriefTemplate | null>(null)
+  const [activeStepId, setActiveStepId] = useState<ReviewStepId>('template')
 
   useEffect(() => {
     if (!id) return
     setLoading(true)
     api
       .getBrief(id)
-      .then(setBrief)
+      .then((b) => {
+        setBrief(b)
+        setActiveStepId(defaultActiveStep(deriveSteps(b, null)))
+      })
       .catch((e) => setLoadError((e as Error).message))
       .finally(() => setLoading(false))
   }, [id])
@@ -110,6 +135,7 @@ export default function BriefReviewPage() {
   const summary = brief.input_summary_json
   const structured = brief.structured_brief_json
   const clarifications = brief.clarifications_json
+  const steps = deriveSteps(brief, busy)
 
   const applyAnswers = () => {
     const questions = clarifications?.questions ?? []
@@ -141,6 +167,7 @@ export default function BriefReviewPage() {
 
   const downloadExport = async (format: 'markdown' | 'json') => {
     setError(null)
+    setBusy(format === 'markdown' ? 'export-md' : 'export-json')
     try {
       const blob = await api.exportBrief(brief.id, format)
       const url = URL.createObjectURL(blob)
@@ -153,134 +180,136 @@ export default function BriefReviewPage() {
       URL.revokeObjectURL(url)
     } catch (e) {
       setError((e as Error).message)
+    } finally {
+      setBusy(null)
     }
   }
 
-  return (
-    <div className="review-page">
-      <div className="briefs-page__head">
-        <h1>{brief.title}</h1>
-        <div className="review-head-right">
-          <span className={`badge badge--${brief.status}`}>{brief.status}</span>
-          {brief.brand_id != null && (
-            <Link to={`/brands/${brief.brand_id}`} className="btn btn--ghost">
-              К бренду
-            </Link>
-          )}
-        </div>
-      </div>
+  const stepIndex = steps.findIndex((s) => s.id === activeStepId)
+  const activeStep = steps[stepIndex] ?? steps[0]
+  const goPrevious = () => {
+    if (stepIndex > 0) setActiveStepId(steps[stepIndex - 1].id)
+  }
+  const goNext = () => {
+    if (stepIndex < steps.length - 1) setActiveStepId(steps[stepIndex + 1].id)
+  }
 
-      {error && <div className="form-error">{error}</div>}
+  // Сообщение лоадера показываем, только если busy относится к активному шагу
+  // (export-* в BUSY_MESSAGES нет → у них только busy на кнопке).
+  const processingMessage =
+    busy && stepIdForBusy(busy) === activeStep.id ? BUSY_MESSAGES[busy] : undefined
 
-      {/* 0. Структура итогового брифа */}
-      <section className="card review-section">
-        <h3>Структура итогового брифа</h3>
-        {templateDraft ? (
+  // Контент активного шага. Логика/handlers те же, что и раньше — меняется только то,
+  // что показывается один шаг за раз внутри StepPanel.
+  const renderStep = () => {
+    switch (activeStep.id) {
+      case 'template':
+        return (
           <>
-            <TemplateEditor
-              template={templateDraft}
-              onChange={setTemplateDraft}
-              disabled={busy !== null}
-            />
-            <div className="review-actions">
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={saveTemplate}
-                disabled={busy !== null}
-              >
-                {busy === 'save-template' ? 'Сохраняем…' : 'Сохранить структуру'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="review-actions">
-            <p className="review-muted">
-              Структура не выбрана — по умолчанию используется стандартная.
-            </p>
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={useDefaultTemplate}
-              disabled={busy !== null}
-            >
-              {busy === 'save-template' ? '…' : 'Использовать стандартную структуру'}
-            </button>
-          </div>
-        )}
-        {brief.reference_template_text && (
-          <details className="template-ref-details">
-            <summary>Референс структуры</summary>
-            <pre className="review-raw">{brief.reference_template_text}</pre>
-          </details>
-        )}
-      </section>
-
-      {/* Raw input */}
-      <section className="card review-section">
-        <h3>Исходный клиентский бриф</h3>
-        {brief.raw_input_text ? (
-          <pre className="review-raw">{brief.raw_input_text}</pre>
-        ) : (
-          <p className="review-muted">— нет текста —</p>
-        )}
-      </section>
-
-      {/* 1. Summary */}
-      <section className="card review-section">
-        <h3>1. Summary</h3>
-        {!summary ? (
-          <div className="review-actions">
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => run('summarize', () => api.summarizeInput(brief.id))}
-              disabled={busy !== null || !brief.raw_input_text}
-            >
-              {busy === 'summarize' ? 'Генерируем…' : 'Сгенерировать summary'}
-            </button>
-          </div>
-        ) : (
-          <>
-            <p>{summary.summary || '—'}</p>
-            <h4>Ключевые факты</h4>
-            <List items={summary.key_facts} />
-            <h4>Явные требования</h4>
-            <List items={summary.explicit_requirements} />
-            <h4>Ограничения</h4>
-            <List items={summary.constraints} />
-            <h4>Неоднозначные фрагменты</h4>
-            <List items={summary.uncertain_fragments} />
-            <div className="review-actions">
-              {!brief.is_input_summary_verified ? (
+            {templateDraft ? (
+              <>
+                <TemplateEditor
+                  template={templateDraft}
+                  onChange={setTemplateDraft}
+                  disabled={busy !== null}
+                />
+                <div className="review-actions">
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={saveTemplate}
+                    disabled={busy !== null}
+                  >
+                    {busy === 'save-template' ? 'Сохраняем…' : 'Сохранить структуру'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="review-actions">
+                <p className="review-muted">
+                  Структура не выбрана — по умолчанию используется стандартная.
+                </p>
                 <button
                   type="button"
                   className="btn btn--primary"
-                  onClick={() => run('verify', () => api.verifyInputSummary(brief.id))}
+                  onClick={useDefaultTemplate}
                   disabled={busy !== null}
                 >
-                  {busy === 'verify' ? '…' : 'Подтвердить summary'}
+                  {busy === 'save-template' ? '…' : 'Использовать стандартную структуру'}
                 </button>
-              ) : (
-                <span className="review-ok">summary подтверждён ✓</span>
-              )}
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => run('summarize', () => api.summarizeInput(brief.id))}
-                disabled={busy !== null}
-              >
-                Пересобрать summary
-              </button>
-            </div>
+              </div>
+            )}
+            {brief.reference_template_text && (
+              <details className="template-ref-details">
+                <summary>Референс структуры</summary>
+                <pre className="review-raw">{brief.reference_template_text}</pre>
+              </details>
+            )}
           </>
-        )}
-      </section>
+        )
 
-      {/* 2. Structured brief */}
-      <section className="card review-section">
-        <h3>2. Структурированный бриф</h3>
-        {!structured ? (
+      case 'summary':
+        return (
+          <>
+            <details className="template-ref-details review-raw-details">
+              <summary>Исходный клиентский бриф</summary>
+              {brief.raw_input_text ? (
+                <pre className="review-raw">{brief.raw_input_text}</pre>
+              ) : (
+                <p className="review-muted">— нет текста —</p>
+              )}
+            </details>
+            {!summary ? (
+              <div className="review-actions">
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => run('summarize', () => api.summarizeInput(brief.id))}
+                  disabled={busy !== null || !brief.raw_input_text}
+                >
+                  {busy === 'summarize' ? 'Генерируем…' : 'Сгенерировать summary'}
+                </button>
+              </div>
+            ) : (
+              <>
+                <p>{summary.summary || '—'}</p>
+                <h4>Ключевые факты</h4>
+                <List items={summary.key_facts} />
+                <h4>Явные требования</h4>
+                <List items={summary.explicit_requirements} />
+                <h4>Ограничения</h4>
+                <List items={summary.constraints} />
+                <h4>Неоднозначные фрагменты</h4>
+                <List items={summary.uncertain_fragments} />
+                <div className="review-actions">
+                  {!brief.is_input_summary_verified ? (
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={() => run('verify', () => api.verifyInputSummary(brief.id))}
+                      disabled={busy !== null}
+                    >
+                      {busy === 'verify' ? '…' : 'Подтвердить summary'}
+                    </button>
+                  ) : (
+                    <span className="review-ok">summary подтверждён ✓</span>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => run('summarize', () => api.summarizeInput(brief.id))}
+                    disabled={busy !== null}
+                  >
+                    Пересобрать summary
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )
+
+      case 'structure':
+        return !structured ? (
           brief.is_input_summary_verified ? (
             <div className="review-actions">
               <button
@@ -332,134 +361,170 @@ export default function BriefReviewPage() {
               </button>
             </div>
           </>
-        )}
-      </section>
+        )
 
-      {/* 3. Clarifications */}
-      {structured && (
-        <section className="card review-section">
-          <h3>3. Уточняющие вопросы</h3>
-          {!clarifications ? (
-            <div className="review-actions">
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => run('clarify', () => api.generateClarifications(brief.id))}
-                disabled={busy !== null}
-              >
-                {busy === 'clarify' ? 'Генерируем…' : 'Сгенерировать вопросы'}
-              </button>
-            </div>
-          ) : (
-            <>
-              {IMPORTANCE_ORDER.map((imp) => {
-                const qs = clarifications.questions.filter((q) => q.importance === imp)
-                if (!qs.length) return null
-                return (
-                  <div className={`clarification-group clarification-group--${imp}`} key={imp}>
-                    <h4>{IMPORTANCE_LABELS[imp]}</h4>
-                    {qs.map((q, i) => {
-                      const key = q.id || q.field || `q${i}`
-                      return (
-                        <div className="clarification-card" key={key}>
-                          <div className="clarification-card__q">{q.question}</div>
-                          {q.field && (
-                            <div className="clarification-card__field">поле: {q.field}</div>
-                          )}
-                          {q.options.length > 0 && (
-                            <div className="review-muted">варианты: {q.options.join(', ')}</div>
-                          )}
-                          <textarea
-                            rows={2}
-                            value={answers[key] ?? ''}
-                            placeholder="Ваш ответ…"
-                            onChange={(e) =>
-                              setAnswers((a) => ({ ...a, [key]: e.target.value }))
-                            }
-                          />
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })}
-              <div className="review-actions">
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={applyAnswers}
-                  disabled={busy !== null}
-                >
-                  {busy === 'apply' ? 'Применяем…' : 'Применить ответы'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() => run('clarify', () => api.generateClarifications(brief.id))}
-                  disabled={busy !== null}
-                >
-                  Пересобрать вопросы
-                </button>
-              </div>
-            </>
-          )}
-        </section>
-      )}
-
-      {/* 4. Final generation */}
-      {structured && (
-        <section className="card review-section">
-          <h3>4. Финальный бриф</h3>
-          {brief.is_generated_outdated && (
-            <div className="hint-banner">
-              <span className="hint-banner__icon">⟳</span>
-              Структура изменилась после последней генерации. Рекомендуется сгенерировать заново.
-            </div>
-          )}
+      case 'clarifications':
+        return !structured ? (
+          <p className="review-muted">Сначала структурируйте бриф.</p>
+        ) : !clarifications ? (
           <div className="review-actions">
             <button
               type="button"
               className="btn btn--primary"
-              onClick={() =>
-                run('generate', () => api.generateFinalBrief(brief.id), CRITICAL_409)
-              }
+              onClick={() => run('clarify', () => api.generateClarifications(brief.id))}
               disabled={busy !== null}
             >
-              {busy === 'generate'
-                ? 'Генерируем…'
-                : brief.generated_markdown
-                  ? 'Сгенерировать заново'
-                  : 'Сгенерировать финальный бриф'}
+              {busy === 'clarify' ? 'Генерируем…' : 'Сгенерировать вопросы'}
             </button>
-            {brief.generated_markdown && (
-              <>
-                <button type="button" className="btn btn--ghost" onClick={copyMarkdown}>
-                  {copied ? 'Скопировано ✓' : 'Copy Markdown'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() => downloadExport('markdown')}
-                >
-                  Download Markdown
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() => downloadExport('json')}
-                >
-                  Download JSON
-                </button>
-              </>
-            )}
           </div>
-          {brief.generated_markdown && (
-            <div className="doc-frame" style={{ marginTop: 16 }}>
-              <MarkdownView markdown={brief.generated_markdown} />
+        ) : (
+          <>
+            {IMPORTANCE_ORDER.map((imp) => {
+              const qs = clarifications.questions.filter((q) => q.importance === imp)
+              if (!qs.length) return null
+              return (
+                <div className={`clarification-group clarification-group--${imp}`} key={imp}>
+                  <h4>{IMPORTANCE_LABELS[imp]}</h4>
+                  {qs.map((q, i) => {
+                    const key = q.id || q.field || `q${i}`
+                    return (
+                      <div className="clarification-card" key={key}>
+                        <div className="clarification-card__q">{q.question}</div>
+                        {q.field && (
+                          <div className="clarification-card__field">поле: {q.field}</div>
+                        )}
+                        {q.options.length > 0 && (
+                          <div className="review-muted">варианты: {q.options.join(', ')}</div>
+                        )}
+                        <textarea
+                          rows={2}
+                          value={answers[key] ?? ''}
+                          placeholder="Ваш ответ…"
+                          onChange={(e) => setAnswers((a) => ({ ...a, [key]: e.target.value }))}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+            <div className="review-actions">
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={applyAnswers}
+                disabled={busy !== null}
+              >
+                {busy === 'apply' ? 'Применяем…' : 'Применить ответы'}
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => run('clarify', () => api.generateClarifications(brief.id))}
+                disabled={busy !== null}
+              >
+                Пересобрать вопросы
+              </button>
             </div>
+          </>
+        )
+
+      case 'final':
+        return !structured ? (
+          <p className="review-muted">Сначала структурируйте бриф.</p>
+        ) : (
+          <>
+            {brief.is_generated_outdated && (
+              <div className="hint-banner">
+                <span className="hint-banner__icon">⟳</span>
+                Структура изменилась после последней генерации. Рекомендуется сгенерировать заново.
+              </div>
+            )}
+            <div className="review-actions">
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => run('generate', () => api.generateFinalBrief(brief.id), CRITICAL_409)}
+                disabled={busy !== null}
+              >
+                {busy === 'generate'
+                  ? 'Генерируем…'
+                  : brief.generated_markdown
+                    ? 'Сгенерировать заново'
+                    : 'Сгенерировать финальный бриф'}
+              </button>
+              {brief.generated_markdown && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={copyMarkdown}
+                    disabled={busy !== null}
+                  >
+                    {copied ? 'Скопировано ✓' : 'Copy Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => downloadExport('markdown')}
+                    disabled={busy !== null}
+                  >
+                    {busy === 'export-md' ? 'Скачиваем…' : 'Download Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => downloadExport('json')}
+                    disabled={busy !== null}
+                  >
+                    {busy === 'export-json' ? 'Скачиваем…' : 'Download JSON'}
+                  </button>
+                </>
+              )}
+            </div>
+            {brief.generated_markdown && (
+              <div className="doc-frame" style={{ marginTop: 16 }}>
+                <MarkdownView markdown={brief.generated_markdown} />
+              </div>
+            )}
+          </>
+        )
+
+      default:
+        return null
+    }
+  }
+
+  return (
+    <div className="review-page">
+      <div className="briefs-page__head">
+        <h1>{brief.title}</h1>
+        <div className="review-head-right">
+          <span className={`badge badge--${brief.status}`}>{brief.status}</span>
+          {brief.brand_id != null && (
+            <Link to={`/brands/${brief.brand_id}`} className="btn btn--ghost">
+              К бренду
+            </Link>
           )}
-        </section>
-      )}
+        </div>
+      </div>
+
+      <ReviewStateSummary brief={brief} steps={steps} />
+
+      <ReviewStepper steps={steps} activeId={activeStepId} onSelect={setActiveStepId} />
+
+      {error && <div className="form-error">{error}</div>}
+
+      <StepPanel
+        step={activeStep}
+        onPrevious={goPrevious}
+        onNext={goNext}
+        canPrevious={stepIndex > 0}
+        canNext={stepIndex < steps.length - 1}
+      >
+        {processingMessage && <ProcessingState message={processingMessage} />}
+        {renderStep()}
+      </StepPanel>
     </div>
   )
 }
