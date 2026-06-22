@@ -2079,3 +2079,68 @@ a {
   background: var(--success-bg);
   color: var(--success);
 }
+
+/* --- step panel (один активный шаг) --- */
+.step-panel {
+  padding: 24px;
+}
+
+.step-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.step-panel-header h3 {
+  font-size: 18px;
+}
+
+.step-status {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  white-space: nowrap;
+}
+
+.step-status--done {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.step-status--needs_action {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.step-status--blocked {
+  background: var(--error-bg);
+  color: var(--error);
+}
+.step-status--empty {
+  background: var(--accent-mild);
+  color: var(--muted-hard);
+}
+
+.step-panel-hint {
+  margin-top: 4px;
+}
+
+.step-panel-body {
+  margin-top: 16px;
+}
+
+.step-panel-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.review-raw-details {
+  margin-bottom: 12px;
+}
