@@ -28,6 +28,13 @@ const BUSY_STEP: Record<string, ReviewStepId> = {
   clarify: 'clarifications',
   apply: 'clarifications',
   generate: 'final',
+  'export-md': 'final',
+  'export-json': 'final',
+}
+
+/** Шаг, к которому относится текущий busy-ключ (или null). */
+export function stepIdForBusy(busy: string | null): ReviewStepId | null {
+  return busy ? (BUSY_STEP[busy] ?? null) : null
 }
 
 function hasBlockingFields(brief: Brief): boolean {

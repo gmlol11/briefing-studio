@@ -3,12 +3,30 @@ import { Link, useParams } from 'react-router-dom'
 import type { Brief, BriefTemplate, ClarificationImportance } from '../api/types'
 import { api, ApiError } from '../api/client'
 import MarkdownView from '../components/MarkdownView'
+import ProcessingState from '../components/ProcessingState'
+import ReviewStateSummary from '../components/ReviewStateSummary'
 import ReviewStepper from '../components/ReviewStepper'
 import SourceBadge from '../components/SourceBadge'
 import StatusBadge from '../components/StatusBadge'
 import StepPanel from '../components/StepPanel'
 import TemplateEditor from '../components/TemplateEditor'
-import { deriveSteps, defaultActiveStep, type ReviewStepId } from '../review/steps'
+import {
+  deriveSteps,
+  defaultActiveStep,
+  stepIdForBusy,
+  type ReviewStepId,
+} from '../review/steps'
+
+/** Сообщения для ProcessingState по busy-ключу (export — лёгкий busy на кнопке, без панели). */
+const BUSY_MESSAGES: Record<string, string> = {
+  'save-template': 'Сохраняем структуру…',
+  summarize: 'Готовим summary…',
+  verify: 'Подтверждаем summary…',
+  structure: 'Структурируем бриф…',
+  clarify: 'Формируем уточняющие вопросы…',
+  apply: 'Применяем ответы…',
+  generate: 'Генерируем итоговый документ…',
+}
 
 const IMPORTANCE_ORDER: ClarificationImportance[] = ['critical', 'recommended', 'optional']
 const IMPORTANCE_LABELS: Record<ClarificationImportance, string> = {
@@ -149,6 +167,7 @@ export default function BriefReviewPage() {
 
   const downloadExport = async (format: 'markdown' | 'json') => {
     setError(null)
+    setBusy(format === 'markdown' ? 'export-md' : 'export-json')
     try {
       const blob = await api.exportBrief(brief.id, format)
       const url = URL.createObjectURL(blob)
@@ -161,6 +180,8 @@ export default function BriefReviewPage() {
       URL.revokeObjectURL(url)
     } catch (e) {
       setError((e as Error).message)
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -172,6 +193,11 @@ export default function BriefReviewPage() {
   const goNext = () => {
     if (stepIndex < steps.length - 1) setActiveStepId(steps[stepIndex + 1].id)
   }
+
+  // Сообщение лоадера показываем, только если busy относится к активному шагу
+  // (export-* в BUSY_MESSAGES нет → у них только busy на кнопке).
+  const processingMessage =
+    busy && stepIdForBusy(busy) === activeStep.id ? BUSY_MESSAGES[busy] : undefined
 
   // Контент активного шага. Логика/handlers те же, что и раньше — меняется только то,
   // что показывается один шаг за раз внутри StepPanel.
@@ -429,22 +455,29 @@ export default function BriefReviewPage() {
               </button>
               {brief.generated_markdown && (
                 <>
-                  <button type="button" className="btn btn--ghost" onClick={copyMarkdown}>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={copyMarkdown}
+                    disabled={busy !== null}
+                  >
                     {copied ? 'Скопировано ✓' : 'Copy Markdown'}
                   </button>
                   <button
                     type="button"
                     className="btn btn--ghost"
                     onClick={() => downloadExport('markdown')}
+                    disabled={busy !== null}
                   >
-                    Download Markdown
+                    {busy === 'export-md' ? 'Скачиваем…' : 'Download Markdown'}
                   </button>
                   <button
                     type="button"
                     className="btn btn--ghost"
                     onClick={() => downloadExport('json')}
+                    disabled={busy !== null}
                   >
-                    Download JSON
+                    {busy === 'export-json' ? 'Скачиваем…' : 'Download JSON'}
                   </button>
                 </>
               )}
@@ -476,6 +509,8 @@ export default function BriefReviewPage() {
         </div>
       </div>
 
+      <ReviewStateSummary brief={brief} steps={steps} />
+
       <ReviewStepper steps={steps} activeId={activeStepId} onSelect={setActiveStepId} />
 
       {error && <div className="form-error">{error}</div>}
@@ -487,6 +522,7 @@ export default function BriefReviewPage() {
         canPrevious={stepIndex > 0}
         canNext={stepIndex < steps.length - 1}
       >
+        {processingMessage && <ProcessingState message={processingMessage} />}
         {renderStep()}
       </StepPanel>
     </div>
