@@ -2089,11 +2089,14 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
+  flex-wrap: wrap;
 }
 
 .step-panel-header h3 {
   font-size: 18px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .step-status {
