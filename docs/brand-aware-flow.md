@@ -184,5 +184,20 @@ Status: accepted — backend + frontend реализованы. Миграция
 не меняются. `structure` толерантна к отсутствию шаблона (не жёсткий гейт). Wizard-flow не затронут.
 
 ## Сознательно вне этой итерации
-File upload/loaders (референс — только вставка текста), DOCX/PDF, stepper-редизайн, brand
+File upload/loaders (референс — только вставка текста), PDF, stepper-редизайн, brand
 identity, отдельная таблица шаблонов, brand-level дефолт, инлайн-редактирование structured-полей.
+
+---
+
+# Экспорт итогового брифа
+
+Сгенерированный `generated_markdown` экспортируется в три формата (общие эндпоинты
+`/api/briefs/{id}/export/*`, работают одинаково для wizard и brand-aware freeform):
+
+- `export/markdown` — `.md`;
+- `export/json` — `.json` (полное состояние брифа);
+- `export/docx` — `.docx` (через `python-docx`; конвертер `services/docx_export.py` рендерит
+  то же подмножество markdown, что и `MarkdownView`: `#/##/###`, списки, `**bold**`).
+
+DOCX строится из `generated_markdown` (brand/template-метаданные в тело не добавляются);
+`409`, если бриф ещё не сгенерирован. **PDF и brand identity — вне scope.**

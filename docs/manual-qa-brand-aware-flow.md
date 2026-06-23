@@ -71,7 +71,8 @@ python scripts/seed_demo.py
       «Подтвердить summary».
    3. **Структурирование** — поля с бейджами **source_type / status / confidence**.
    4. **Уточнения** — вопросы `clarifications` (importance critical/recommended/optional) + ответы.
-   5. **Финальный бриф / Export** — генерация + markdown + Copy / Download md / Download json.
+   5. **Финальный бриф / Export** — генерация + markdown + Copy / Download MD / Download JSON /
+      Download DOCX.
 6. (нужен `LLM_API_KEY`) Ответить на уточнения → «Применить» → «Сгенерировать финальный бриф».
 7. 409-гейт: если в структуре есть `critical_missing`/`conflict` (в т.ч. `required`-поле шаблона
    без данных), generate-final возвращает понятную ошибку «Не подтверждены критичные поля: …».
@@ -98,7 +99,16 @@ python scripts/seed_demo.py
   «Готовим summary…», structure → «Структурируем бриф…», clarify → «Формируем уточняющие
   вопросы…», apply → «Применяем ответы…», generate final → «Генерируем итоговый документ…»;
   на это время кнопки шага disabled, шаг в степпере — `processing`;
-- export markdown/json — лёгкий busy на самой кнопке («Скачиваем…»), без большой панели.
+- export markdown/json/**docx** — лёгкий busy на самой кнопке («Скачиваем…»), без большой панели.
+
+**Export DOCX** (шаг 5 / wizard-зона):
+- кнопка **Download DOCX** есть и в review (шаг «Финальный бриф / Export»), и у wizard
+  generated-брифа (блок AiActions);
+- клик → скачивается `brief-{id}.docx`; на время — busy «Скачиваем…» (review);
+- файл открывается в Word / LibreOffice / Pages (или хотя бы распаковывается как zip:
+  внутри `word/document.xml`, `[Content_Types].xml`);
+- если `generated_markdown` отсутствует — `GET /export/docx` → **409** (кнопка показывается
+  только для сгенерированного брифа).
 
 ## 4. Pre-generated документы, версии, export
 
@@ -106,8 +116,9 @@ python scripts/seed_demo.py
 
 1. Виден готовый markdown-документ с бейджем «AI-generated».
 2. **Versions**: раскрывается история (минимум v1) в документном стиле.
-3. **Export**: «Download Markdown» (`/export/markdown`) и «Download JSON» (`/export/json`)
-   скачивают файлы; для wizard до генерации markdown-export даёт 409 (на готовом — 200).
+3. **Export**: «Download Markdown» (`/export/markdown`), «Download JSON» (`/export/json`) и
+   «Download DOCX» (`/export/docx`) скачивают файлы; до генерации md/docx-export дают 409
+   (на готовом — 200). DOCX открывается в Word/LibreOffice/Pages (или как zip).
    Во время скачивания кнопка показывает «Скачиваем…», остальные действия disabled (freeform на
    шаге «Финальный бриф / Export»).
 4. **Copy** копирует markdown в буфер.
@@ -129,7 +140,8 @@ python scripts/seed_demo.py
 - Оба flow доходят до конца без 5xx и без падений UI.
 - Wizard-брифы открываются в редакторе, freeform-брифы — на `/review`.
 - В списке `/briefs` freeform помечены бейджем и ведут на `/review`; wizard — на `/brief/:id`.
-- Pre-generated брифы показывают markdown, версии и экспортируются; `is_generated_outdated`
+- Pre-generated брифы показывают markdown, версии и экспортируются (md/json/docx);
+  `is_generated_outdated`
   корректно реагирует на изменение источника.
 - Удаление бренда не ломает связанные брифы (их `brand_id` обнуляется).
 - Seed идемпотентен: повторный запуск не плодит дубли.
@@ -170,7 +182,7 @@ python scripts/seed_demo.py
 - [ ] **Редирект `/brief/:id` → `/review`**: не сбивает ли с толку, что freeform-бриф
       перекидывает с редактора на review-экран?
 - [ ] **Устаревание**: заметно ли в UI, что документ устарел после изменения структуры?
-- [ ] **Copy / Download**: удобны ли действия copy / download markdown / download json,
+- [ ] **Copy / Download**: удобны ли действия copy / download markdown / json / docx,
       понятны ли их подписи?
 
 ### Известные сознательные ограничения (не баги)
