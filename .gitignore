@@ -18,3 +18,9 @@ dist/
 .mypy_cache/
 *.egg-info/
 build/
+
+# Playwright E2E artifacts
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.playwright/
