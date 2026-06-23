@@ -8,6 +8,7 @@ import type {
   BriefAnalysis,
   BriefContextUpdate,
   BriefCreatePayload,
+  BriefExportFormat,
   BriefListItem,
   BriefTemplate,
   BriefUpdatePayload,
@@ -101,7 +102,7 @@ export const api = {
   listBriefVersions: (id: number | string) =>
     request<BriefVersion[]>(`/api/briefs/${id}/versions`),
 
-  exportBrief: (id: number | string, format: 'markdown' | 'json') =>
+  exportBrief: (id: number | string, format: BriefExportFormat) =>
     download(`/api/briefs/${id}/export/${format}`),
 
   // --- brands ---

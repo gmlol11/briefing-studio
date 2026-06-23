@@ -30,6 +30,7 @@ const BUSY_STEP: Record<string, ReviewStepId> = {
   generate: 'final',
   'export-md': 'final',
   'export-json': 'final',
+  'export-docx': 'final',
 }
 
 /** Шаг, к которому относится текущий busy-ключ (или null). */

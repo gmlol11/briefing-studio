@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import type { Brief, BriefTemplate, ClarificationImportance } from '../api/types'
+import type { Brief, BriefExportFormat, BriefTemplate, ClarificationImportance } from '../api/types'
 import { api, ApiError } from '../api/client'
 import MarkdownView from '../components/MarkdownView'
 import ProcessingState from '../components/ProcessingState'
@@ -16,6 +16,18 @@ import {
   stepIdForBusy,
   type ReviewStepId,
 } from '../review/steps'
+
+/** Расширение файла и busy-ключ для каждого формата экспорта. */
+const EXPORT_EXT: Record<BriefExportFormat, string> = {
+  markdown: 'md',
+  json: 'json',
+  docx: 'docx',
+}
+const EXPORT_BUSY: Record<BriefExportFormat, string> = {
+  markdown: 'export-md',
+  json: 'export-json',
+  docx: 'export-docx',
+}
 
 /** Сообщения для ProcessingState по busy-ключу (export — лёгкий busy на кнопке, без панели). */
 const BUSY_MESSAGES: Record<string, string> = {
@@ -165,15 +177,15 @@ export default function BriefReviewPage() {
     }
   }
 
-  const downloadExport = async (format: 'markdown' | 'json') => {
+  const downloadExport = async (format: BriefExportFormat) => {
     setError(null)
-    setBusy(format === 'markdown' ? 'export-md' : 'export-json')
+    setBusy(EXPORT_BUSY[format])
     try {
       const blob = await api.exportBrief(brief.id, format)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `brief-${brief.id}.${format === 'markdown' ? 'md' : 'json'}`
+      a.download = `brief-${brief.id}.${EXPORT_EXT[format]}`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -478,6 +490,14 @@ export default function BriefReviewPage() {
                     disabled={busy !== null}
                   >
                     {busy === 'export-json' ? 'Скачиваем…' : 'Download JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => downloadExport('docx')}
+                    disabled={busy !== null}
+                  >
+                    {busy === 'export-docx' ? 'Скачиваем…' : 'Download DOCX'}
                   </button>
                 </>
               )}

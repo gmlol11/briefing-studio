@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Brief, BriefAnalysis, BriefStatus } from '../api/types'
+import type { Brief, BriefAnalysis, BriefExportFormat, BriefStatus } from '../api/types'
 import { api, ApiError } from '../api/client'
 import { STATUS_LABELS, contextFieldLabel } from '../wizard/steps'
 import BriefVersions from './BriefVersions'
@@ -139,14 +139,15 @@ export default function AiActions({
     }
   }
 
-  const downloadExport = async (format: 'markdown' | 'json') => {
+  const downloadExport = async (format: BriefExportFormat) => {
     setError(null)
     try {
       const blob = await api.exportBrief(briefId, format)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `brief-${briefId}.${format === 'markdown' ? 'md' : 'json'}`
+      const ext = format === 'markdown' ? 'md' : format
+      a.download = `brief-${briefId}.${ext}`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -288,6 +289,13 @@ export default function AiActions({
               onClick={() => downloadExport('json')}
             >
               Download JSON
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => downloadExport('docx')}
+            >
+              Download DOCX
             </button>
           </div>
           <div className="doc-frame">
