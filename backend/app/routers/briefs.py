@@ -21,6 +21,7 @@ from app.schemas import (
     SectionRegenerateResponse,
 )
 from app.services import brief_ai_service
+from app.services.docx_export import build_docx
 from app.utils import context_hash
 
 router = APIRouter(prefix="/api/briefs", tags=["briefs"])
@@ -204,6 +205,25 @@ def export_json(brief_id: int, db: Session = Depends(get_db)) -> Response:
         content=json.dumps(payload, ensure_ascii=False, indent=2),
         media_type="application/json; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="brief-{brief.id}.json"'},
+    )
+
+
+@router.get("/{brief_id}/export/docx")
+def export_docx(brief_id: int, db: Session = Depends(get_db)) -> Response:
+    """Скачать сгенерированный бриф как .docx файл (wizard и freeform одинаково)."""
+    brief = _get_brief_or_404(brief_id, db)
+    if not brief.generated_markdown:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Бриф ещё не сгенерирован — нечего экспортировать",
+        )
+    content = build_docx(brief.generated_markdown, title=brief.title)
+    return Response(
+        content=content,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="brief-{brief.id}.docx"'},
     )
 
 
