@@ -16,13 +16,13 @@ Monorepo: React-frontend, FastAPI-backend, PostgreSQL.
   уточняющие вопросы, допущения, риски (в БД не сохраняется).
 - **AI-генерация** финального markdown-брифа + **история версий** (`BriefVersion`).
 - **Отслеживание устаревания**: стабильный hash контекста → `is_generated_outdated`.
-- **Экспорт** `.md` и `.json`.
+- **Экспорт** `.md`, `.json` и `.docx`.
 - Тёплая glass-тема (Raleway / Inter), адаптивный layout.
 
 ## Стек
 
 - **Backend**: FastAPI · SQLAlchemy 2.0 · Alembic · PostgreSQL (psycopg3) · pydantic-settings ·
-  OpenAI-compatible LLM.
+  OpenAI-compatible LLM · python-docx (DOCX-экспорт).
 - **Frontend**: React 18 · Vite · TypeScript · React Router 6.
 - **Инфра**: Docker Compose (db / backend / frontend).
 
@@ -70,7 +70,8 @@ briefing-studio/
 4. **Анализ** — `POST .../analyze` возвращает оценку готовности (в БД не сохраняется).
 5. **Генерация** — `POST .../generate`: сохраняет markdown в `generated_markdown`, создаёт
    `BriefVersion` (снимок контекста + метаданные), пишет hash контекста, ставит `status=generated`.
-6. **Экспорт / правки** — `export/markdown` (409 до генерации) и `export/json`;
+6. **Экспорт / правки** — `export/markdown` (409 до генерации), `export/json` и
+   `export/docx` (DOCX из `generated_markdown`, 409 до генерации);
    `regenerate-section` возвращает новый текст раздела, но сохранённый документ не патчит.
 7. **Устаревание** — если контекст меняют после генерации, текущий hash ≠ сохранённого →
    `is_generated_outdated=true` → UI предлагает перегенерировать (новая версия v2, v3, …).
@@ -208,6 +209,7 @@ alembic upgrade head
 | POST   | `/api/briefs/{brief_id}/regenerate-section` | Переписать один раздел markdown-брифа (без патча документа) |
 | GET    | `/api/briefs/{brief_id}/export/markdown` | Скачать `.md` файл (409, если бриф не сгенерирован)    |
 | GET    | `/api/briefs/{brief_id}/export/json` | Скачать `.json` с полным состоянием брифа                  |
+| GET    | `/api/briefs/{brief_id}/export/docx` | Скачать `.docx` (из `generated_markdown`, 409 до генерации) |
 | GET    | `/api/briefs/{brief_id}/versions` | Список версий генераций (новые — сверху)                     |
 | GET    | `/api/briefs/{brief_id}/versions/{version_id}` | Одна версия генерации                           |
 
