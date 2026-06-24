@@ -29,7 +29,8 @@ services:
       db:
         condition: service_healthy
     # Prod run: no --reload, no bind-mount, code baked into the image.
-    # Migrations entrypoint is added in commit #3; here uvicorn runs directly.
+    # entrypoint applies alembic migrations, then exec's the command below.
+    entrypoint: ["./entrypoint.sh"]
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     # slim image has no curl/wget — probe /health with stdlib python instead.
     healthcheck:
