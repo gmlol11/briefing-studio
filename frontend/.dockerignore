@@ -1,0 +1,10 @@
+# Keep the build context small and avoid copying host-platform artifacts
+# (macOS node_modules binaries) into the alpine build image.
+node_modules
+dist
+.env
+.env.*
+*.log
+test-results
+playwright-report
+e2e
