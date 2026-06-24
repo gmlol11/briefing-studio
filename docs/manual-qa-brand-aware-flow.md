@@ -32,6 +32,13 @@ python scripts/seed_demo.py
 
 Очистка / пересоздание: `python scripts/seed_demo.py --reset`.
 
+> **E2E-smoke перед ручным QA.** Эти же demo-данные использует Playwright-набор
+> (`frontend/e2e`). Перед ручным прогоном полезно прогнать `cd frontend && npm run test:e2e`
+> (backend на :8000 + `seed_demo.py --reset` обязательны; реальный LLM не нужен). E2E **не
+> заменяет** ручной QA — он ловит smoke-регрессии (рендер, routing, степпер, шаги, экспорт
+> md/json/docx, outdated), а сценарии ниже остаются основной приёмкой. См.
+> [../frontend/e2e/README.md](../frontend/e2e/README.md).
+
 ## 2. Проверка wizard-flow
 
 1. Открыть `/briefs` → найти `[DEMO] Wizard — промо-ролик` (без бейджа Freeform) → открыть.
