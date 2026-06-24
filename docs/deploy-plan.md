@@ -4,6 +4,19 @@
 Сама prod-инфраструктура добавляется отдельными аддитивными коммитами (compose/nginx/entrypoint)
 и **не ломает dev-flow**; реальный деплой (хост, DNS, TLS, секреты) остаётся ручным шагом.
 
+## Статус реализации (deploy-prep)
+
+- **Коммит #2** (`Add production compose and nginx`) — готов: `docker-compose.prod.yml`,
+  `frontend/Dockerfile.prod`, `frontend/nginx.conf`, `frontend/.dockerignore`.
+- **Коммит #3** (`Add backend production entrypoint`) — готов: `backend/entrypoint.sh`
+  (`alembic upgrade head` → `exec "$@"`), подключён в prod-compose; `backend/Dockerfile`
+  делает скрипт executable.
+- Все prod-файлы из плана **присутствуют в репозитории**; product-код и dev-`docker-compose.yml`
+  не менялись.
+- **Следующий шаг — приёмочный Docker-smoke пользователя.** Полный чеклист — в README,
+  раздел «Production / deploy-prep» → «Acceptance smoke-чеклист». На dev-машине Claude Docker
+  недоступен, поэтому end-to-end prod-smoke выполняет пользователь.
+
 ## Текущий dev-профиль (docker-compose.yml)
 
 Запуск:
