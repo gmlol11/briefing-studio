@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import type { BrandIdentity } from '../api/types'
 import { api } from '../api/client'
+import BrandIdentityEditor, { EMPTY_IDENTITY } from '../components/BrandIdentityEditor'
 
 /** Создание нового бренда. */
 export default function BrandNewPage() {
@@ -8,6 +10,7 @@ export default function BrandNewPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [contextText, setContextText] = useState('{\n  \n}')
+  const [identity, setIdentity] = useState<BrandIdentity>(EMPTY_IDENTITY)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -34,6 +37,7 @@ export default function BrandNewPage() {
         name: name.trim(),
         description: description.trim() || null,
         brand_context_json,
+        brand_identity_json: identity,
       })
       navigate(`/brands/${brand.id}`)
     } catch (e) {
@@ -80,6 +84,11 @@ export default function BrandNewPage() {
               Произвольный JSON-объект: позиционирование, аудитория, tone of voice и т.п.
               Используется AI при структурировании брифа.
             </p>
+          </div>
+
+          <div className="identity-section">
+            <h2 className="identity-section__title">Бренд-айдентика</h2>
+            <BrandIdentityEditor value={identity} onChange={setIdentity} />
           </div>
         </div>
 

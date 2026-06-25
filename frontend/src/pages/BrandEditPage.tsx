@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import type { Brand } from '../api/types'
+import type { Brand, BrandIdentity } from '../api/types'
 import { api } from '../api/client'
+import BrandIdentityEditor, { EMPTY_IDENTITY } from '../components/BrandIdentityEditor'
 
 /** Просмотр и редактирование бренда. */
 export default function BrandEditPage() {
@@ -13,6 +14,7 @@ export default function BrandEditPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [contextText, setContextText] = useState('{}')
+  const [identity, setIdentity] = useState<BrandIdentity>(EMPTY_IDENTITY)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -26,6 +28,8 @@ export default function BrandEditPage() {
         setName(b.name)
         setDescription(b.description ?? '')
         setContextText(JSON.stringify(b.brand_context_json ?? {}, null, 2))
+        // merge с EMPTY_IDENTITY на случай частичного/отсутствующего объекта
+        setIdentity({ ...EMPTY_IDENTITY, ...(b.brand_identity_json ?? {}) })
       })
       .catch((e) => setLoadError((e as Error).message))
   }, [id])
@@ -77,6 +81,7 @@ export default function BrandEditPage() {
         name: name.trim(),
         description: description.trim() || null,
         brand_context_json: ctx,
+        brand_identity_json: identity,
       })
       setBrand(updated)
       setSaved(true)
@@ -137,6 +142,11 @@ export default function BrandEditPage() {
               spellCheck={false}
               onChange={(e) => setContextText(e.target.value)}
             />
+          </div>
+
+          <div className="identity-section">
+            <h2 className="identity-section__title">Бренд-айдентика</h2>
+            <BrandIdentityEditor value={identity} onChange={setIdentity} />
           </div>
         </div>
 
