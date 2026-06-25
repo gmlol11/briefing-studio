@@ -73,6 +73,41 @@ def test_build_docx_empty_or_invalid_identity_does_not_break(identity):
     assert _first_heading_color(doc) is None
 
 
+def _all_text(doc):
+    return "\n".join(p.text for p in doc.paragraphs)
+
+
+def test_build_docx_header_block_renders():
+    doc = Document(
+        io.BytesIO(
+            build_docx(
+                MD,
+                title="t",
+                brand_name="Север",
+                document_label="Креативный бриф",
+                date_text="25.06.2026",
+                identity={"font_family": "Georgia", "accent_color": "#1f6feb"},
+            )
+        )
+    )
+    text = _all_text(doc)
+    assert "Север" in text
+    assert "Креативный бриф" in text
+    assert "25.06.2026" in text
+    # бренд-шрифт всё ещё применяется к телу
+    assert doc.styles["Normal"].font.name == "Georgia"
+
+
+def test_build_docx_without_header_kwargs_has_no_letterhead():
+    doc = Document(io.BytesIO(build_docx(MD, title="t")))
+    # первый непустой параграф — markdown H1, а не letterhead
+    first = next(p for p in doc.paragraphs if p.text.strip())
+    assert first.style.name == "Heading 1"
+    assert first.text.strip() == "Бриф"
+    # нет meta-разделителя
+    assert " · " not in _all_text(doc)
+
+
 # --- endpoint (DB) --------------------------------------------------------
 
 
@@ -137,6 +172,36 @@ def test_export_docx_freeform_with_identity(client, db_session):
     assert resp.content[:4] == b"PK\x03\x04"
     doc = Document(io.BytesIO(resp.content))
     assert doc.styles["Normal"].font.name == "Georgia"
+
+
+@pytest.mark.db
+def test_export_docx_header_has_brand_and_label(client, db_session):
+    from app.models import Brand, Brief
+
+    brand = Brand(name="Бренд-Икс", brand_identity_json={"accent_color": "#1f6feb"})
+    db_session.add(brand)
+    db_session.flush()
+    brief = Brief(
+        title="F", brand_id=brand.id, generated_markdown=MD, status="generated"
+    )
+    db_session.add(brief)
+    db_session.commit()
+    resp = client.get(f"/api/briefs/{brief.id}/export/docx")
+    assert resp.status_code == 200
+    text = "\n".join(p.text for p in Document(io.BytesIO(resp.content)).paragraphs)
+    assert "Бренд-Икс" in text  # бренд-строка letterhead
+    assert "Коммуникационный бриф" in text  # document_label (brief_type=custom)
+
+
+@pytest.mark.db
+def test_export_docx_no_brand_has_label_but_no_brand_name(client, db_session):
+    brief_id = _generated_wizard(db_session)  # без бренда
+    resp = client.get(f"/api/briefs/{brief_id}/export/docx")
+    assert resp.status_code == 200
+    doc = Document(io.BytesIO(resp.content))
+    text = "\n".join(p.text for p in doc.paragraphs)
+    # letterhead с типом документа есть и без бренда
+    assert "Коммуникационный бриф" in text
 
 
 @pytest.mark.db
