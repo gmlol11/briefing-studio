@@ -25,6 +25,8 @@ def create_brand(payload: BrandCreate, db: Session = Depends(get_db)) -> Brand:
         name=payload.name,
         description=payload.description,
         brand_context_json=payload.brand_context_json,
+        # exclude_unset: айдентика не передана → {}; передана частично → как есть.
+        brand_identity_json=payload.brand_identity_json.model_dump(exclude_unset=True),
     )
     db.add(brand)
     db.commit()
@@ -52,6 +54,9 @@ def update_brand(
     """Обновить бренд (name, description, brand_context_json)."""
     brand = _get_brand_or_404(brand_id, db)
     data = payload.model_dump(exclude_unset=True)
+    if "brand_identity_json" in data:
+        # колонка NOT NULL: явный null приводим к пустой айдентике
+        data["brand_identity_json"] = data["brand_identity_json"] or {}
     for field, value in data.items():
         setattr(brand, field, value)
     db.commit()
