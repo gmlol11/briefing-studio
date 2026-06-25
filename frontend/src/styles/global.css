@@ -1899,6 +1899,37 @@ a {
   color: var(--text-muted);
   margin: 2px 0 6px;
 }
+.clarification-card__fieldkey {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Suggested answers — compact, keyboard-accessible chips that fill the textarea. */
+.clarification-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.clarification-option {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-solid);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.clarification-option:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.clarification-option:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
 
 .clarification-card textarea {
   width: 100%;

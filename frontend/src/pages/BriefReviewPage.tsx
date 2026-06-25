@@ -407,10 +407,24 @@ export default function BriefReviewPage() {
                       <div className="clarification-card" key={key}>
                         <div className="clarification-card__q">{q.question}</div>
                         {q.field && (
-                          <div className="clarification-card__field">поле: {q.field}</div>
+                          <div className="clarification-card__field">
+                            Поле: {resolveFieldLabel(q.field, brief.selected_template_json)}{' '}
+                            <span className="clarification-card__fieldkey">{q.field}</span>
+                          </div>
                         )}
                         {q.options.length > 0 && (
-                          <div className="review-muted">варианты: {q.options.join(', ')}</div>
+                          <div className="clarification-options">
+                            {q.options.map((opt, oi) => (
+                              <button
+                                type="button"
+                                className="clarification-option"
+                                key={oi}
+                                onClick={() => setAnswers((a) => ({ ...a, [key]: opt }))}
+                              >
+                                {opt}
+                              </button>
+                            ))}
+                          </div>
                         )}
                         <textarea
                           rows={2}
