@@ -158,11 +158,27 @@ export type FieldStatus =
 
 export type ClarificationImportance = 'critical' | 'recommended' | 'optional'
 
+export type DocumentStyle = 'clean_premium' | 'minimal' | 'bold' | 'classic'
+
+// Визуальный слой бренда (зеркалит backend BrandIdentity). Все поля nullable —
+// пустая айдентика валидна. Хранится в Brand.brand_identity_json, отдельно от
+// brand_context_json (тот идёт в LLM-промпты).
+export interface BrandIdentity {
+  primary_color: string | null
+  secondary_color: string | null
+  accent_color: string | null
+  logo_url: string | null
+  font_family: string | null
+  document_style: DocumentStyle | null
+  brand_notes: string | null
+}
+
 export interface Brand {
   id: number
   name: string
   description: string | null
   brand_context_json: Record<string, unknown>
+  brand_identity_json: BrandIdentity
   created_at: string
   updated_at: string
 }
@@ -179,12 +195,14 @@ export interface BrandCreatePayload {
   name: string
   description?: string | null
   brand_context_json?: Record<string, unknown>
+  brand_identity_json?: BrandIdentity
 }
 
 export interface BrandUpdatePayload {
   name?: string
   description?: string | null
   brand_context_json?: Record<string, unknown>
+  brand_identity_json?: BrandIdentity
 }
 
 export interface InputSummary {
