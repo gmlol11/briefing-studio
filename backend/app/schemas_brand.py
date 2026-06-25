@@ -1,5 +1,6 @@
 """Schemas for the brand-aware freeform briefing flow (additive, separate module)."""
 
+import re
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -31,6 +32,53 @@ class FieldStatus(str, Enum):
     rejected = "rejected"
 
 
+class DocumentStyle(str, Enum):
+    clean_premium = "clean_premium"
+    minimal = "minimal"
+    bold = "bold"
+    classic = "classic"
+
+
+# --- brand identity (visual layer) ----------------------------------------
+# Презентационный слой бренда для preview/export. Все поля опциональны —
+# пустая айдентика (`{}`) валидна. Хранится в Brand.brand_identity_json,
+# отдельно от brand_context_json (тот идёт в LLM-промпты).
+
+_HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+class BrandIdentity(BaseModel):
+    primary_color: str | None = None
+    secondary_color: str | None = None
+    accent_color: str | None = None
+    logo_url: str | None = None
+    font_family: str | None = None
+    document_style: DocumentStyle | None = None
+    brand_notes: str | None = None
+
+    model_config = ConfigDict(extra="ignore")
+
+    @field_validator("primary_color", "secondary_color", "accent_color")
+    @classmethod
+    def _validate_hex(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:  # пустую строку трактуем как «не задано»
+            return None
+        if not _HEX_RE.match(value):
+            raise ValueError("ожидается hex-цвет вида #RGB или #RRGGBB")
+        return value
+
+    @field_validator("logo_url", "font_family", "brand_notes")
+    @classmethod
+    def _empty_to_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
 # --- brand ----------------------------------------------------------------
 
 
@@ -38,6 +86,7 @@ class BrandCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = None
     brand_context_json: dict[str, Any] = Field(default_factory=dict)
+    brand_identity_json: BrandIdentity = Field(default_factory=BrandIdentity)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -46,6 +95,7 @@ class BrandUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=255)
     description: str | None = None
     brand_context_json: dict[str, Any] | None = None
+    brand_identity_json: BrandIdentity | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -55,6 +105,7 @@ class BrandRead(BaseModel):
     name: str
     description: str | None = None
     brand_context_json: dict[str, Any]
+    brand_identity_json: BrandIdentity
     created_at: datetime
     updated_at: datetime
 

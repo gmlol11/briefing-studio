@@ -226,6 +226,12 @@ class Brand(Base):
     brand_context_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict
     )
+    # Визуальный слой бренда (цвета/лого/шрифт/стиль) для preview/export.
+    # Отдельно от brand_context_json, который дословно уходит в LLM-промпты.
+    # Аддитивно, NOT NULL default {} — старые бренды получают пустую айдентику.
+    brand_identity_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
