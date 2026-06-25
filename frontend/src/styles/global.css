@@ -664,7 +664,9 @@ a {
   letter-spacing: 0.06em;
 }
 
-.field input,
+/* Text-like fields only — checkboxes/radios keep native sizing (they live
+   inside .field too, e.g. the template editor and template-mode toggles). */
+.field input:not([type="checkbox"]):not([type="radio"]),
 .field textarea,
 .field select {
   width: 100%;
@@ -677,7 +679,7 @@ a {
   transition: border-color 0.18s, box-shadow 0.18s;
 }
 
-.field input:focus,
+.field input:not([type="checkbox"]):not([type="radio"]):focus,
 .field textarea:focus,
 .field select:focus {
   outline: none;
@@ -1738,6 +1740,13 @@ a {
   font-size: 13px;
   word-break: break-word;
 }
+/* Технический ключ поля — мелким secondary-текстом под человекочитаемой подписью. */
+.review-card__keytag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-word;
+}
 
 .review-card__value {
   font-size: 14px;
@@ -1890,6 +1899,37 @@ a {
   color: var(--text-muted);
   margin: 2px 0 6px;
 }
+.clarification-card__fieldkey {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Suggested answers — compact, keyboard-accessible chips that fill the textarea. */
+.clarification-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.clarification-option {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-solid);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.clarification-option:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.clarification-option:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
 
 .clarification-card textarea {
   width: 100%;
@@ -1951,11 +1991,21 @@ a {
 
 .template-section__head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   cursor: pointer;
   font-weight: 600;
   font-size: 14px;
+}
+
+/* Checkboxes keep native size and never stretch, regardless of .field rules. */
+.template-section__head input[type="checkbox"],
+.template-field input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  cursor: pointer;
 }
 
 .template-fields {
@@ -1967,10 +2017,14 @@ a {
 
 .template-field {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   font-size: 14px;
   cursor: pointer;
+}
+
+.template-field__label {
+  line-height: 1.4;
 }
 
 .template-required {
