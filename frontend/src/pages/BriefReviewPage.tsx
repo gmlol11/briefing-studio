@@ -10,6 +10,7 @@ import SourceBadge from '../components/SourceBadge'
 import StatusBadge from '../components/StatusBadge'
 import StepPanel from '../components/StepPanel'
 import TemplateEditor from '../components/TemplateEditor'
+import { resolveFieldLabel } from '../review/fieldLabels'
 import {
   deriveSteps,
   defaultActiveStep,
@@ -344,9 +345,12 @@ export default function BriefReviewPage() {
                 return (
                   <div className="review-card" key={f.key || i}>
                     <div className="review-card__head">
-                      <span className="review-card__key">{f.key || '(без ключа)'}</span>
+                      <span className="review-card__key">
+                        {resolveFieldLabel(f.key, brief.selected_template_json)}
+                      </span>
                       <StatusBadge status={f.status} />
                     </div>
+                    {f.key && <span className="review-card__keytag">{f.key}</span>}
                     <div className="review-card__value">{f.value || '—'}</div>
                     <div className="review-card__foot">
                       <SourceBadge source={f.source_type} />

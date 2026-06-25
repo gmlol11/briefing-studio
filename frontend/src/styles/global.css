@@ -1740,6 +1740,13 @@ a {
   font-size: 13px;
   word-break: break-word;
 }
+/* Технический ключ поля — мелким secondary-текстом под человекочитаемой подписью. */
+.review-card__keytag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-word;
+}
 
 .review-card__value {
   font-size: 14px;
