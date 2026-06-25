@@ -11,12 +11,17 @@ import re
 from typing import Any
 
 from docx import Document
-from docx.shared import RGBColor
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Pt, RGBColor
 
 _HEADING_RE = re.compile(r"^(#{1,3})\s+(.*)$")
 _BULLET_RE = re.compile(r"^[-*]\s+(.*)$")
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 _HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+_META_GREY = RGBColor(0x88, 0x88, 0x88)
+_NEUTRAL_DIVIDER = RGBColor(0xCC, 0xCC, 0xCC)
 
 
 def _parse_hex(value: Any) -> RGBColor | None:
@@ -33,6 +38,56 @@ def _parse_hex(value: Any) -> RGBColor | None:
         return RGBColor.from_string(h.upper())
     except ValueError:
         return None
+
+
+def _add_divider(document, color: RGBColor) -> None:
+    """Тонкая горизонтальная линия — нижняя граница пустого параграфа."""
+    paragraph = document.add_paragraph()
+    p_pr = paragraph._p.get_or_add_pPr()
+    borders = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), "12")  # 1/8 pt → 12 = 1.5pt
+    bottom.set(qn("w:space"), "1")
+    bottom.set(qn("w:color"), str(color))  # RGBColor → 'RRGGBB'
+    borders.append(bottom)
+    p_pr.append(borders)
+
+
+def _add_header(
+    document,
+    *,
+    brand_name: str | None,
+    document_label: str | None,
+    date_text: str | None,
+    font: str | None,
+    accent: RGBColor | None,
+) -> None:
+    """Верхний блок (letterhead): бренд, мета `label · date`, акцентная линия.
+
+    Рендерится только если задан хоть один из brand_name/document_label/date_text.
+    """
+    if not (brand_name or document_label or date_text):
+        return
+
+    if brand_name:
+        run = document.add_paragraph().add_run(brand_name)
+        run.bold = True
+        run.font.size = Pt(15)
+        if accent is not None:
+            run.font.color.rgb = accent
+        if font:
+            run.font.name = font
+
+    meta = " · ".join(part for part in (document_label, date_text) if part)
+    if meta:
+        run = document.add_paragraph().add_run(meta)
+        run.font.size = Pt(9)
+        run.font.color.rgb = _META_GREY
+        if font:
+            run.font.name = font
+
+    _add_divider(document, accent if accent is not None else _NEUTRAL_DIVIDER)
 
 
 def _add_inline(paragraph, text: str) -> None:
@@ -63,6 +118,9 @@ def build_docx(
     *,
     title: str | None = None,
     identity: dict[str, Any] | None = None,
+    brand_name: str | None = None,
+    document_label: str | None = None,
+    date_text: str | None = None,
 ) -> bytes:
     """Собрать .docx (bytes) из markdown.
 
@@ -73,6 +131,10 @@ def build_docx(
     `font_family` (шрифт документа) и `accent_color`/`primary_color` (цвет
     заголовков). Пустая/невалидная identity (`None`/`{}`/битый hex) → DOCX
     идентичен прежнему. Логотип не используется.
+
+    `brand_name`/`document_label`/`date_text` — верхний блок документа
+    (letterhead) перед телом. Если все три не заданы — блок не добавляется и
+    DOCX идентичен прежнему (backward compatible).
     """
     identity = identity or {}
     raw_font = identity.get("font_family")
@@ -86,6 +148,15 @@ def build_docx(
         document.core_properties.title = title
     if font:
         document.styles["Normal"].font.name = font
+
+    _add_header(
+        document,
+        brand_name=brand_name,
+        document_label=document_label,
+        date_text=date_text,
+        font=font,
+        accent=heading_color,
+    )
 
     for raw in (markdown or "").replace("\r\n", "\n").split("\n"):
         line = raw.strip()

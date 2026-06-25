@@ -26,6 +26,19 @@ from app.utils import context_hash
 
 router = APIRouter(prefix="/api/briefs", tags=["briefs"])
 
+# Человекочитаемый тип документа для DOCX-letterhead (fallback — «Бриф»).
+BRIEF_TYPE_LABELS = {
+    "creative": "Креативный бриф",
+    "client": "Клиентский бриф",
+    "production": "Продакшн-бриф",
+    "ai_production": "AI-продакшн бриф",
+    "landing": "Бриф на лендинг",
+    "video": "Бриф на видео",
+    "presentation": "Бриф на презентацию",
+    "campaign": "Бриф на кампанию",
+    "custom": "Коммуникационный бриф",
+}
+
 
 def _get_brief_or_404(brief_id: int, db: Session) -> Brief:
     brief = db.get(Brief, brief_id)
@@ -218,7 +231,14 @@ def export_docx(brief_id: int, db: Session = Depends(get_db)) -> Response:
             detail="Бриф ещё не сгенерирован — нечего экспортировать",
         )
     identity = brief.brand.brand_identity_json if brief.brand else None
-    content = build_docx(brief.generated_markdown, title=brief.title, identity=identity)
+    content = build_docx(
+        brief.generated_markdown,
+        title=brief.title,
+        identity=identity,
+        brand_name=brief.brand.name if brief.brand else None,
+        document_label=BRIEF_TYPE_LABELS.get(brief.brief_type, "Бриф"),
+        date_text=brief.updated_at.strftime("%d.%m.%Y") if brief.updated_at else None,
+    )
     return Response(
         content=content,
         media_type=(
