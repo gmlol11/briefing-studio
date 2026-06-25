@@ -1159,6 +1159,72 @@ a {
   font-weight: 700;
 }
 
+/* brand-aware document preview (identity applied via CSS vars, safe fallbacks) */
+.doc-branded__header {
+  max-width: 720px;
+  margin-bottom: 18px;
+}
+
+.doc-branded__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.doc-branded__logo {
+  max-height: 44px;
+  max-width: 200px;
+  object-fit: contain;
+}
+
+.doc-branded__brand-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--doc-primary, var(--text));
+}
+
+.doc-branded__accent-line {
+  display: block;
+  height: 3px;
+  margin-top: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--doc-accent, var(--accent));
+}
+
+/* identity vars override headings/body only when set; fallback = current look */
+.doc-branded .doc {
+  font-family: var(--doc-font, var(--font-body));
+}
+
+.doc-branded .doc--md h1 {
+  font-family: var(--doc-font, var(--font-display));
+  color: var(--doc-accent, var(--text));
+}
+
+.doc-branded .doc--md h2 {
+  font-family: var(--doc-font, var(--font-display));
+  color: var(--doc-accent, var(--accent-text));
+}
+
+.doc-branded .doc--md h3 {
+  font-family: var(--doc-font, var(--font-display));
+}
+
+/* document_style hooks — subtle, additive */
+.doc-branded--bold .doc--md h1 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.doc-branded--minimal .doc-branded__accent-line {
+  height: 2px;
+}
+
+.doc-branded--classic .doc {
+  font-family: var(--doc-font, Georgia, 'Times New Roman', serif);
+}
+
 /* AI actions */
 .ai-actions {
   margin-top: 24px;

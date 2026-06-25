@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import type { Brief, BriefExportFormat, BriefTemplate, ClarificationImportance } from '../api/types'
+import type {
+  Brand,
+  Brief,
+  BriefExportFormat,
+  BriefTemplate,
+  ClarificationImportance,
+} from '../api/types'
 import { api, ApiError } from '../api/client'
-import MarkdownView from '../components/MarkdownView'
+import BrandedDocument from '../components/BrandedDocument'
 import ProcessingState from '../components/ProcessingState'
 import ReviewStateSummary from '../components/ReviewStateSummary'
 import ReviewStepper from '../components/ReviewStepper'
@@ -76,6 +82,7 @@ function List({ items }: { items: string[] }) {
 export default function BriefReviewPage() {
   const { id } = useParams<{ id: string }>()
   const [brief, setBrief] = useState<Brief | null>(null)
+  const [brand, setBrand] = useState<Brand | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -101,6 +108,28 @@ export default function BriefReviewPage() {
   useEffect(() => {
     setTemplateDraft(brief?.selected_template_json ?? null)
   }, [brief])
+
+  // Brand identity для brand-aware preview итогового документа. Неблокирующе:
+  // ошибка/отсутствие brand_id → preview работает как обычный markdown.
+  useEffect(() => {
+    const brandId = brief?.brand_id
+    if (brandId == null) {
+      setBrand(null)
+      return
+    }
+    let cancelled = false
+    api
+      .getBrand(brandId)
+      .then((b) => {
+        if (!cancelled) setBrand(b)
+      })
+      .catch(() => {
+        if (!cancelled) setBrand(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [brief?.brand_id])
 
   if (loading) {
     return (
@@ -522,7 +551,11 @@ export default function BriefReviewPage() {
             </div>
             {brief.generated_markdown && (
               <div className="doc-frame" style={{ marginTop: 16 }}>
-                <MarkdownView markdown={brief.generated_markdown} />
+                <BrandedDocument
+                  markdown={brief.generated_markdown}
+                  identity={brand?.brand_identity_json ?? null}
+                  brandName={brand?.name ?? null}
+                />
               </div>
             )}
           </>
