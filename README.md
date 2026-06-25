@@ -143,6 +143,87 @@ npm install
 npm run dev
 ```
 
+## Production / deploy-prep
+
+Отдельный prod-профиль; dev `docker-compose.yml` не трогается. Один публичный вход —
+**nginx** фронтенда: отдаёт собранный SPA и проксирует `/api` на backend (same-origin).
+Внутренняя сеть: `nginx (frontend:80) → backend:8000 → db:5432`; backend и БД наружу
+**не публикуются**. Полный архитектурный план — в [docs/deploy-plan.md](docs/deploy-plan.md).
+
+**Файлы prod-профиля:**
+- `docker-compose.prod.yml` — db (`postgres:16-alpine` + volume `pgdata_prod`) + backend (uvicorn workers, без reload) + frontend (nginx, порт 80);
+- `frontend/Dockerfile.prod` — multi-stage сборка статики (`VITE_API_URL=""`) → `nginx:alpine`;
+- `frontend/nginx.conf` — SPA-fallback + `/api`-proxy (префикс `/api` сохраняется);
+- `backend/entrypoint.sh` — `alembic upgrade head` → `exec uvicorn …`;
+- `.env.prod.example` — шаблон prod-переменных (без секретов).
+
+### 1. Подготовить env
+
+```bash
+cp .env.prod.example .env.prod
+```
+
+Заполнить в `.env.prod`:
+- `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` — креды контейнера PG;
+- `DATABASE_URL` — `postgresql+psycopg://<user>:<password>@db:5432/<db>` (хост = имя сервиса `db`);
+- `APP_ENV=production`, `DEBUG=false`;
+- `LLM_API_KEY` (+ `LLM_MODEL`) — если нужны AI-функции (иначе analyze/generate → 503);
+- `CORS_ORIGINS` — только если фронт и API на **разных** доменах (при same-origin не нужен).
+
+`.env.prod` **не коммитится** (он в `.gitignore`); секреты — через secret-manager / host-env.
+
+### 2. Собрать и поднять
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod build
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+```
+
+### 3. Проверить
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod ps   # db/backend healthy
+curl http://localhost/health          # backend health через nginx
+curl http://localhost/api/briefs      # /api проксируется на backend
+```
+
+Открыть SPA: http://localhost/ (deep-links вроде `/briefs`, `/brands` отдают SPA, а не nginx 404).
+
+### Логи и остановка
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f backend
+docker compose -f docker-compose.prod.yml --env-file .env.prod down      # остановить (volume сохраняется)
+docker compose -f docker-compose.prod.yml --env-file .env.prod down -v    # + удалить данные БД
+```
+
+### Важно
+
+- `.env.prod` **не коммитить**; `seed_demo.py` в prod **не запускать** (dev-guard откажет при `APP_ENV=production`, и seed-шага в prod-compose нет);
+- backend и БД наружу не публикуются — nginx единственный публичный вход;
+- frontend собран с `VITE_API_URL=""` → запросы идут на same-origin `/api` (CORS не нужен);
+- backend `entrypoint.sh` применяет миграции (`alembic upgrade head`) **до** старта uvicorn;
+- схема — **single-node MVP**; для нескольких backend-реплик миграции на старте дадут гонку → выносить в отдельный `migrate`-job;
+- TLS / DNS / бэкапы / secret-manager — ручные production-шаги **вне scope** этого профиля.
+
+### Acceptance smoke-чеклист (выполняет пользователь)
+
+> Docker на dev-машине Claude недоступен → end-to-end prod-smoke — **приёмочный шаг пользователя**.
+> Локально без Docker валидируется лишь `VITE_API_URL="" npm run build` (и, при наличии Docker, `nginx -t`).
+
+- [ ] `.env.prod` создан из `.env.prod.example` и заполнен;
+- [ ] `docker compose -f docker-compose.prod.yml --env-file .env.prod build` проходит;
+- [ ] `… up -d` поднимает стек;
+- [ ] `db` healthy;
+- [ ] `backend` healthy;
+- [ ] `frontend` отвечает на `/`;
+- [ ] deep-link (`/briefs`, `/brands`) отдаёт SPA, а не nginx 404;
+- [ ] `/api/briefs` проксируется через nginx на backend;
+- [ ] `/health` доступен через nginx;
+- [ ] backend-логи показывают `alembic upgrade head` до старта uvicorn;
+- [ ] `.env.prod` не попал в git (`git status` чист);
+- [ ] БД не опубликована наружу (у `db` нет `ports:`).
+
 ## Демо-данные (dev-only)
 
 Идемпотентный seed-скрипт наполняет БД демо-данными для ручной проверки обоих flow

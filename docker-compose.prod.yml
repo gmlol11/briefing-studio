@@ -1,0 +1,56 @@
+# Production compose — single-node MVP.
+# nginx (frontend) is the only public entrypoint; it serves the SPA and
+# proxies /api -> backend. db and backend are internal (no published ports).
+# Run: docker compose -f docker-compose.prod.yml up --build  (needs .env.prod)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: briefing-db-prod
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    # Not published to the host — only reachable on the compose network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: briefing-backend-prod
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    depends_on:
+      db:
+        condition: service_healthy
+    # Prod run: no --reload, no bind-mount, code baked into the image.
+    # entrypoint applies alembic migrations, then exec's the command below.
+    entrypoint: ["./entrypoint.sh"]
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    # slim image has no curl/wget — probe /health with stdlib python instead.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: briefing-frontend-prod
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # nginx is the single public entrypoint.
+    ports:
+      - "80:80"
+
+volumes:
+  pgdata_prod:

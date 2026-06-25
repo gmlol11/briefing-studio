@@ -1,0 +1,22 @@
+# Multi-stage prod build: compile static assets, then serve them via nginx.
+
+# --- Stage 1: build ---
+FROM node:20-alpine AS build
+WORKDIR /app
+
+# Install deps first for better layer caching (node_modules excluded via .dockerignore).
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+# Empty VITE_API_URL → client uses relative /api (same-origin), nginx proxies it.
+# Must be defined-but-empty at build time, or the client falls back to localhost:8000.
+ENV VITE_API_URL=""
+RUN npm run build
+
+# --- Stage 2: serve ---
+FROM nginx:alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
