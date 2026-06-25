@@ -217,7 +217,8 @@ def export_docx(brief_id: int, db: Session = Depends(get_db)) -> Response:
             status_code=status.HTTP_409_CONFLICT,
             detail="Бриф ещё не сгенерирован — нечего экспортировать",
         )
-    content = build_docx(brief.generated_markdown, title=brief.title)
+    identity = brief.brand.brand_identity_json if brief.brand else None
+    content = build_docx(brief.generated_markdown, title=brief.title, identity=identity)
     return Response(
         content=content,
         media_type=(
