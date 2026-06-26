@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -23,7 +24,10 @@ from app.schemas import (
 from app.services import brief_ai_service
 from app.services.docx_export import build_docx
 from app.services.logo_fetcher import fetch_logo_bytes
+from app.services.pdf_export import build_pdf
 from app.utils import context_hash
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/briefs", tags=["briefs"])
 
@@ -222,6 +226,19 @@ def export_json(brief_id: int, db: Session = Depends(get_db)) -> Response:
     )
 
 
+def _export_context(brief: Brief) -> dict[str, Any]:
+    """Общие kwargs letterhead (бренд/тип/дата/логотип) для DOCX- и PDF-экспорта."""
+    identity = brief.brand.brand_identity_json if brief.brand else None
+    logo_url = identity.get("logo_url") if isinstance(identity, dict) else None
+    return {
+        "identity": identity,
+        "brand_name": brief.brand.name if brief.brand else None,
+        "document_label": BRIEF_TYPE_LABELS.get(brief.brief_type, "Бриф"),
+        "date_text": brief.updated_at.strftime("%d.%m.%Y") if brief.updated_at else None,
+        "logo_bytes": fetch_logo_bytes(logo_url),
+    }
+
+
 @router.get("/{brief_id}/export/docx")
 def export_docx(brief_id: int, db: Session = Depends(get_db)) -> Response:
     """Скачать сгенерированный бриф как .docx файл (wizard и freeform одинаково)."""
@@ -231,16 +248,8 @@ def export_docx(brief_id: int, db: Session = Depends(get_db)) -> Response:
             status_code=status.HTTP_409_CONFLICT,
             detail="Бриф ещё не сгенерирован — нечего экспортировать",
         )
-    identity = brief.brand.brand_identity_json if brief.brand else None
-    logo_url = identity.get("logo_url") if isinstance(identity, dict) else None
     content = build_docx(
-        brief.generated_markdown,
-        title=brief.title,
-        identity=identity,
-        brand_name=brief.brand.name if brief.brand else None,
-        document_label=BRIEF_TYPE_LABELS.get(brief.brief_type, "Бриф"),
-        date_text=brief.updated_at.strftime("%d.%m.%Y") if brief.updated_at else None,
-        logo_bytes=fetch_logo_bytes(logo_url),
+        brief.generated_markdown, title=brief.title, **_export_context(brief)
     )
     return Response(
         content=content,
@@ -248,6 +257,32 @@ def export_docx(brief_id: int, db: Session = Depends(get_db)) -> Response:
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         ),
         headers={"Content-Disposition": f'attachment; filename="brief-{brief.id}.docx"'},
+    )
+
+
+@router.get("/{brief_id}/export/pdf")
+def export_pdf(brief_id: int, db: Session = Depends(get_db)) -> Response:
+    """Скачать сгенерированный бриф как .pdf (HTML → headless Chromium)."""
+    brief = _get_brief_or_404(brief_id, db)
+    if not brief.generated_markdown:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Бриф ещё не сгенерирован — нечего экспортировать",
+        )
+    try:
+        content = build_pdf(
+            brief.generated_markdown, title=brief.title, **_export_context(brief)
+        )
+    except Exception:
+        logger.warning("PDF export failed for brief %s", brief.id, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="PDF export is temporarily unavailable",
+        ) from None
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="brief-{brief.id}.pdf"'},
     )
 
 

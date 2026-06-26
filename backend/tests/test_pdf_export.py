@@ -149,3 +149,73 @@ def test_build_pdf_with_identity_returns_pdf():
 def test_build_pdf_without_identity_returns_pdf():
     data = build_pdf(MD)
     assert data[:5] == b"%PDF-"
+
+
+# --- endpoint (DB; PDF-marked ones also need Chromium) --------------------
+
+
+def _generated_brief(db_session, identity=None):
+    from app.models import Brand, Brief
+
+    brand = Brand(name="B", brand_identity_json=identity or {})
+    db_session.add(brand)
+    db_session.flush()
+    brief = Brief(
+        title="F pdf", brand_id=brand.id, generated_markdown=MD, status="generated"
+    )
+    db_session.add(brief)
+    db_session.commit()
+    return brief.id
+
+
+def _generated_no_brand(db_session):
+    from app.models import Brief
+
+    brief = Brief(title="W pdf", generated_markdown=MD, status="generated")
+    db_session.add(brief)
+    db_session.commit()
+    return brief.id
+
+
+@pytest.mark.db
+@pytest.mark.pdf
+@requires_chromium
+def test_export_pdf_with_identity(client, db_session):
+    logo = "data:image/png;base64," + base64.b64encode(PNG_BYTES).decode()
+    brief_id = _generated_brief(
+        db_session,
+        identity={"accent_color": "#1f6feb", "font_family": "Georgia", "logo_url": logo},
+    )
+    resp = client.get(f"/api/briefs/{brief_id}/export/pdf")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/pdf")
+    assert resp.content[:5] == b"%PDF-"
+    assert f"brief-{brief_id}.pdf" in resp.headers["content-disposition"]
+
+
+@pytest.mark.db
+@pytest.mark.pdf
+@requires_chromium
+def test_export_pdf_without_identity(client, db_session):
+    brief_id = _generated_no_brand(db_session)
+    resp = client.get(f"/api/briefs/{brief_id}/export/pdf")
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"
+
+
+@pytest.mark.db
+def test_export_pdf_409_when_not_generated(client):
+    brief_id = client.post("/api/briefs", json={"title": "x"}).json()["id"]
+    assert client.get(f"/api/briefs/{brief_id}/export/pdf").status_code == 409
+
+
+@pytest.mark.db
+def test_export_pdf_503_when_build_fails(client, db_session, monkeypatch):
+    def _boom(*args, **kwargs):
+        raise RuntimeError("chromium unavailable")
+
+    monkeypatch.setattr("app.routers.briefs.build_pdf", _boom)
+    brief_id = _generated_no_brand(db_session)
+    resp = client.get(f"/api/briefs/{brief_id}/export/pdf")
+    assert resp.status_code == 503
+    assert "unavailable" in resp.json()["detail"].lower()
