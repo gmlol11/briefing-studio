@@ -7,13 +7,16 @@
 """
 
 import io
+import logging
 import re
 from typing import Any
 
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Pt, RGBColor
+from docx.shared import Inches, Pt, RGBColor
+
+logger = logging.getLogger(__name__)
 
 _HEADING_RE = re.compile(r"^(#{1,3})\s+(.*)$")
 _BULLET_RE = re.compile(r"^[-*]\s+(.*)$")
@@ -54,6 +57,20 @@ def _add_divider(document, color: RGBColor) -> None:
     p_pr.append(borders)
 
 
+def _add_logo(document, logo_bytes: bytes) -> None:
+    """Вставить логотип отдельным параграфом сверху.
+
+    Если python-docx не распознал картинку (или иная ошибка) — пустой параграф
+    удаляется, экспорт продолжается без логотипа.
+    """
+    paragraph = document.add_paragraph()
+    try:
+        paragraph.add_run().add_picture(io.BytesIO(logo_bytes), width=Inches(1.6))
+    except Exception:
+        logger.warning("logo skipped: unrecognized or invalid image bytes")
+        paragraph._element.getparent().remove(paragraph._element)
+
+
 def _add_header(
     document,
     *,
@@ -62,13 +79,17 @@ def _add_header(
     date_text: str | None,
     font: str | None,
     accent: RGBColor | None,
+    logo_bytes: bytes | None = None,
 ) -> None:
-    """Верхний блок (letterhead): бренд, мета `label · date`, акцентная линия.
+    """Верхний блок (letterhead): логотип, бренд, мета `label · date`, линия.
 
-    Рендерится только если задан хоть один из brand_name/document_label/date_text.
+    Рендерится, если задан хоть один из logo_bytes/brand_name/document_label/date_text.
     """
-    if not (brand_name or document_label or date_text):
+    if not (logo_bytes or brand_name or document_label or date_text):
         return
+
+    if logo_bytes:
+        _add_logo(document, logo_bytes)
 
     if brand_name:
         run = document.add_paragraph().add_run(brand_name)
@@ -121,6 +142,7 @@ def build_docx(
     brand_name: str | None = None,
     document_label: str | None = None,
     date_text: str | None = None,
+    logo_bytes: bytes | None = None,
 ) -> bytes:
     """Собрать .docx (bytes) из markdown.
 
@@ -132,8 +154,10 @@ def build_docx(
     заголовков). Пустая/невалидная identity (`None`/`{}`/битый hex) → DOCX
     идентичен прежнему. Логотип не используется.
 
-    `brand_name`/`document_label`/`date_text` — верхний блок документа
-    (letterhead) перед телом. Если все три не заданы — блок не добавляется и
+    `brand_name`/`document_label`/`date_text`/`logo_bytes` — верхний блок
+    документа (letterhead) перед телом. `logo_bytes` (готовые PNG/JPEG-байты,
+    например из logo_fetcher) вставляются картинкой сверху; нераспознанные —
+    молча пропускаются. Если ничего из этого не задано — блок не добавляется и
     DOCX идентичен прежнему (backward compatible).
     """
     identity = identity or {}
@@ -156,6 +180,7 @@ def build_docx(
         date_text=date_text,
         font=font,
         accent=heading_color,
+        logo_bytes=logo_bytes,
     )
 
     for raw in (markdown or "").replace("\r\n", "\n").split("\n"):

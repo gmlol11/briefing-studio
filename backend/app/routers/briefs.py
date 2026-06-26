@@ -22,6 +22,7 @@ from app.schemas import (
 )
 from app.services import brief_ai_service
 from app.services.docx_export import build_docx
+from app.services.logo_fetcher import fetch_logo_bytes
 from app.utils import context_hash
 
 router = APIRouter(prefix="/api/briefs", tags=["briefs"])
@@ -231,6 +232,7 @@ def export_docx(brief_id: int, db: Session = Depends(get_db)) -> Response:
             detail="Бриф ещё не сгенерирован — нечего экспортировать",
         )
     identity = brief.brand.brand_identity_json if brief.brand else None
+    logo_url = identity.get("logo_url") if isinstance(identity, dict) else None
     content = build_docx(
         brief.generated_markdown,
         title=brief.title,
@@ -238,6 +240,7 @@ def export_docx(brief_id: int, db: Session = Depends(get_db)) -> Response:
         brand_name=brief.brand.name if brief.brand else None,
         document_label=BRIEF_TYPE_LABELS.get(brief.brief_type, "Бриф"),
         date_text=brief.updated_at.strftime("%d.%m.%Y") if brief.updated_at else None,
+        logo_bytes=fetch_logo_bytes(logo_url),
     )
     return Response(
         content=content,

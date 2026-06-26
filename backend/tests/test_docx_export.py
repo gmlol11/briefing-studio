@@ -1,5 +1,6 @@
 """DOCX export — build_docx unit + /export/docx endpoint (wizard & freeform)."""
 
+import base64
 import io
 
 import pytest
@@ -9,6 +10,12 @@ from app.services.docx_export import build_docx
 
 DOCX_CT = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 MD = "# Бриф\n\n## Цель\n\n- первый **пункт**\n\nфинальный абзац"
+
+# 1x1 PNG, который распознаёт python-docx (для logo-тестов; без интернета)
+PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ"
+    "/pLvAAAAAElFTkSuQmCC"
+)
 
 
 # --- unit (no DB) ---------------------------------------------------------
@@ -108,6 +115,34 @@ def test_build_docx_without_header_kwargs_has_no_letterhead():
     assert " · " not in _all_text(doc)
 
 
+def test_build_docx_with_logo_embeds_image():
+    doc = Document(
+        io.BytesIO(build_docx(MD, brand_name="Север", logo_bytes=PNG_BYTES))
+    )
+    assert len(doc.inline_shapes) == 1
+    # бренд и тело документа на месте
+    text = _all_text(doc)
+    assert "Север" in text
+    assert "Бриф" in text
+
+
+def test_build_docx_without_logo_has_no_image():
+    doc = Document(io.BytesIO(build_docx(MD, brand_name="Север", logo_bytes=None)))
+    assert len(doc.inline_shapes) == 0
+
+
+def test_build_docx_broken_logo_does_not_break():
+    doc = Document(
+        io.BytesIO(
+            build_docx(MD, brand_name="Север", logo_bytes=b"definitely not an image")
+        )
+    )
+    assert len(doc.inline_shapes) == 0  # битый логотип пропущен
+    text = _all_text(doc)
+    assert "Север" in text  # header/body не сломаны
+    assert "Бриф" in text
+
+
 # --- endpoint (DB) --------------------------------------------------------
 
 
@@ -201,6 +236,34 @@ def test_export_docx_no_brand_has_label_but_no_brand_name(client, db_session):
     doc = Document(io.BytesIO(resp.content))
     text = "\n".join(p.text for p in doc.paragraphs)
     # letterhead с типом документа есть и без бренда
+    assert "Коммуникационный бриф" in text
+
+
+@pytest.mark.db
+def test_export_docx_embeds_logo_when_fetch_succeeds(client, db_session, monkeypatch):
+    monkeypatch.setattr("app.routers.briefs.fetch_logo_bytes", lambda url: PNG_BYTES)
+    brief_id = _generated_freeform(
+        db_session, identity={"logo_url": "https://cdn.example.com/logo.png"}
+    )
+    resp = client.get(f"/api/briefs/{brief_id}/export/docx")
+    assert resp.status_code == 200
+    doc = Document(io.BytesIO(resp.content))
+    assert len(doc.inline_shapes) == 1
+
+
+@pytest.mark.db
+def test_export_docx_no_logo_when_fetch_returns_none(client, db_session, monkeypatch):
+    monkeypatch.setattr("app.routers.briefs.fetch_logo_bytes", lambda url: None)
+    brief_id = _generated_freeform(
+        db_session, identity={"logo_url": "https://cdn.example.com/logo.png"}
+    )
+    resp = client.get(f"/api/briefs/{brief_id}/export/docx")
+    assert resp.status_code == 200
+    doc = Document(io.BytesIO(resp.content))
+    assert len(doc.inline_shapes) == 0
+    # letterhead (бренд/тип) всё равно есть
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "B" in text  # brand name из _generated_freeform
     assert "Коммуникационный бриф" in text
 
 
