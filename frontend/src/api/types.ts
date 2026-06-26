@@ -11,7 +11,7 @@ export type BriefType =
   | 'campaign'
   | 'custom'
 
-export type BriefExportFormat = 'markdown' | 'json' | 'docx'
+export type BriefExportFormat = 'markdown' | 'json' | 'docx' | 'pdf'
 
 export interface MessageHierarchy {
   primary: string

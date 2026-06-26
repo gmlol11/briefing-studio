@@ -297,6 +297,13 @@ export default function AiActions({
             >
               Download DOCX
             </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => downloadExport('pdf')}
+            >
+              Download PDF
+            </button>
           </div>
           <div className="doc-frame">
             <MarkdownView markdown={generatedMarkdown} />

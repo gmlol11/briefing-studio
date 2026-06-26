@@ -29,11 +29,13 @@ const EXPORT_EXT: Record<BriefExportFormat, string> = {
   markdown: 'md',
   json: 'json',
   docx: 'docx',
+  pdf: 'pdf',
 }
 const EXPORT_BUSY: Record<BriefExportFormat, string> = {
   markdown: 'export-md',
   json: 'export-json',
   docx: 'export-docx',
+  pdf: 'export-pdf',
 }
 
 /** Сообщения для ProcessingState по busy-ключу (export — лёгкий busy на кнопке, без панели). */
@@ -545,6 +547,14 @@ export default function BriefReviewPage() {
                     disabled={busy !== null}
                   >
                     {busy === 'export-docx' ? 'Скачиваем…' : 'Download DOCX'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => downloadExport('pdf')}
+                    disabled={busy !== null}
+                  >
+                    {busy === 'export-pdf' ? 'Скачиваем…' : 'Download PDF'}
                   </button>
                 </>
               )}
