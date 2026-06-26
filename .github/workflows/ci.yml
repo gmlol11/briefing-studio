@@ -59,6 +59,10 @@ jobs:
         working-directory: backend
         run: pip install -r requirements-dev.txt
 
+      - name: Install Playwright chromium (backend, for PDF export)
+        working-directory: backend
+        run: python -m playwright install --with-deps chromium
+
       - name: Alembic upgrade head
         working-directory: backend
         run: alembic upgrade head
