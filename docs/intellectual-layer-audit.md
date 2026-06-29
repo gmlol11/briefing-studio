@@ -271,3 +271,38 @@ Rewrite `generate_final_brand_brief.md` to add a two-phase structure:
 - Maintain 409-gate logic (critical_missing fields still block generation).
 
 No code changes. No migrations. No endpoint changes. No UI changes.
+
+---
+
+## V1 decision: strategic-default, no generation modes
+
+For v1 we ship a single strategic-by-default generation behavior and do **not**
+implement generation modes. This records the decision so it is not re-litigated.
+
+**Not added in v1:**
+- UI selector for generation modes;
+- backend `generation_mode` parameter;
+- persisting a chosen mode in the database;
+- separate conservative / creative prompt variants.
+
+**Why:**
+- B1 already established the desired strategic default behavior, validated by QA;
+- for the demo and v1, a stable high-quality baseline matters more than optionality;
+- modes without a UI consumer would be dead code;
+- modes would require new product surface, additional tests, and changes to
+  hash/version semantics (`generated_hash_source`);
+- this is better left to post-v1 when there is a real product reason.
+
+**Current behavior (v1):**
+- final generation works as strategic-by-default;
+- facts stay factual;
+- interpretations / hypotheses / directions are explicitly labeled
+  (`Факт:` / `Интерпретация:` / `Гипотеза:` / `Направление:`);
+- conservative / creative modes are not exposed.
+
+**Possible post-v1 evolution:**
+- `generation_mode = conservative | strategic | creative`;
+- UI selector for the mode;
+- include the mode in `generated_hash_source` (so changing mode marks outdated);
+- mode-specific QA;
+- possibly a stored `enrichment_json` (variant B from the options above).
