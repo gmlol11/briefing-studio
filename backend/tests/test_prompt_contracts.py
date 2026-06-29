@@ -6,8 +6,9 @@ Pure unit tests: no LLM, no DB. They load prompts through the same
 whole sentences — so legitimate wording tweaks don't break them, but dropping
 a guarantee does.
 
-Intentionally out of scope here: ``regenerate_section.md`` (B2.2 will change
-it; asserting its current shape now would create a red test on purpose).
+``regenerate_section.md`` is covered too (B2.2): a regenerated section must
+carry the same epistemic labels and anti-hallucination guard as the enriched
+document, while keeping the user's instruction as the top priority.
 """
 
 from app.services.prompt_service import get_prompt
@@ -81,3 +82,19 @@ def test_wizard_prompt_keeps_all_17_sections_in_order():
 def test_wizard_prompt_references_context_json_as_source():
     # Output must be grounded in context_json, not invented.
     assert "context_json" in get_prompt("generate_brief")
+
+
+# ── regenerate_section.md (section-level rewrite) ────────────────────────────
+
+
+def test_regenerate_prompt_has_epistemic_labels():
+    assert_contains_all(get_prompt("regenerate_section"), EPISTEMIC_LABELS)
+
+
+def test_regenerate_prompt_keeps_anti_hallucination_guard():
+    assert ANTI_HALLUCINATION_MARKER in get_prompt("regenerate_section")
+
+
+def test_regenerate_prompt_prioritizes_user_instruction():
+    # The user's instruction must win over strategic framing.
+    assert "Инструкция пользователя" in get_prompt("regenerate_section")
