@@ -128,6 +128,15 @@ curl -sf https://storage.yandexcloud.net/cloud-certs/CA.pem -o ~/.postgresql/roo
 then add `&sslrootcert=/root/.postgresql/root.crt` to `DATABASE_URL` and mount the
 file into the backend service (a small compose override).
 
+**`.env.prod` is a Docker Compose env-file, not a shell script.** It is passed to
+Compose with `--env-file .env.prod`, which reads it as `KEY=VALUE` lines (no shell
+evaluation) for both container env and `${VAR}` interpolation. The deploy/rollback
+scripts do **not** `source` it — they only read `YC_REGISTRY` / `IMAGE_TAG` literally.
+This is deliberate: `DATABASE_URL` may contain characters that are special to the
+shell (`&`, `#`, `$`, `!` — e.g. the `&sslrootcert=...` above), and those must be
+left untouched. Do **not** wrap values in extra quotes hoping the shell will strip
+them; write them plain, exactly as Compose expects.
+
 ---
 
 ## 5. Run migrations (explicit)

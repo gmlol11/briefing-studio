@@ -31,11 +31,25 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-set -a
-# shellcheck disable=SC1090
-. "./$ENV_FILE"
-set +a
+# Read ONLY YC_REGISTRY from the env file, WITHOUT sourcing it. .env.prod is a
+# Docker Compose env-file, NOT a shell script: DATABASE_URL and other values may
+# contain shell-special characters (& # $ !). Container env still comes from
+# `docker compose --env-file $ENV_FILE`; IMAGE_TAG here comes from the CLI arg.
+read_env() {
+  # read_env KEY FILE -> literal value (last match wins), surrounding quotes stripped.
+  local key="$1" file="$2" line val=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"   # strip leading whitespace
+    case "$line" in
+      "#"*|"") continue ;;
+      "$key="*) val="${line#*=}" ;;
+    esac
+  done < "$file"
+  val="${val%\"}"; val="${val#\"}"; val="${val%\'}"; val="${val#\'}"
+  printf '%s' "$val"
+}
 
+YC_REGISTRY="$(read_env YC_REGISTRY "$ENV_FILE")"
 export IMAGE_TAG="$PREV_TAG"
 : "${YC_REGISTRY:?YC_REGISTRY must be set in .env.prod}"
 

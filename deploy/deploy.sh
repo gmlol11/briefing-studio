@@ -27,15 +27,33 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-# Load YC_REGISTRY / IMAGE_TAG / etc. into the shell so compose can interpolate
-# ${YC_REGISTRY} and ${IMAGE_TAG} in docker-compose.yandex.yml.
-set -a
-# shellcheck disable=SC1090
-. "./$ENV_FILE"
-set +a
+# Read ONLY the two variables the shell itself needs (YC_REGISTRY, IMAGE_TAG)
+# from the env file, WITHOUT sourcing it. .env.prod is a Docker Compose env-file,
+# NOT a shell script: DATABASE_URL and other values may contain characters that
+# are special to the shell (& # $ !), so it must never be `source`d here.
+# Every container's env still comes from `docker compose --env-file $ENV_FILE`.
+read_env() {
+  # read_env KEY FILE -> literal value (last match wins), surrounding quotes stripped.
+  # No shell evaluation: the value is taken verbatim after the first '='.
+  local key="$1" file="$2" line val=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"   # strip leading whitespace
+    case "$line" in
+      "#"*|"") continue ;;
+      "$key="*) val="${line#*=}" ;;
+    esac
+  done < "$file"
+  val="${val%\"}"; val="${val#\"}"; val="${val%\'}"; val="${val#\'}"
+  printf '%s' "$val"
+}
 
-# CLI arg overrides IMAGE_TAG from the env file.
-IMAGE_TAG="${1:-${IMAGE_TAG:-}}"
+# YC_REGISTRY is only needed for the message/validation below; NOT exported, so
+# Compose reads it from --env-file for ${YC_REGISTRY} interpolation.
+YC_REGISTRY="$(read_env YC_REGISTRY "$ENV_FILE")"
+
+# CLI arg overrides IMAGE_TAG from the env file. Exported so Compose uses it for
+# ${IMAGE_TAG} interpolation (an exported shell var wins over --env-file).
+IMAGE_TAG="${1:-$(read_env IMAGE_TAG "$ENV_FILE")}"
 export IMAGE_TAG
 
 : "${YC_REGISTRY:?YC_REGISTRY must be set in .env.prod}"
