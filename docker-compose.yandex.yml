@@ -1,0 +1,59 @@
+# Yandex Cloud production compose.
+#
+# Differences from the local single-node docker-compose.prod.yml:
+#   - NO local PostgreSQL — uses Yandex Managed PostgreSQL via DATABASE_URL.
+#   - Images are PULLED from Yandex Container Registry (built + pushed from
+#     dev/CI), not built on the VM.
+#   - Migrations are run EXPLICITLY before the app is updated (see deploy/deploy.sh),
+#     not silently on container startup. The backend here runs plain uvicorn.
+#   - A dedicated nginx reverse proxy is the single public entrypoint.
+#
+# Image tags are pinned by ${IMAGE_TAG} so deploy/rollback can move between builds.
+# Registry path and tag come from the shell env (loaded from .env.prod by the
+# deploy scripts). Container env comes from .env.prod via env_file.
+#
+# Run (via scripts): ./deploy/deploy.sh <IMAGE_TAG>
+# Run (manual):      IMAGE_TAG=<tag> docker compose -f docker-compose.yandex.yml --env-file .env.prod up -d
+
+services:
+  backend:
+    image: ${YC_REGISTRY}/briefing-backend:${IMAGE_TAG:-latest}
+    container_name: briefing-backend
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    # Plain uvicorn — NO alembic here. Migrations are applied explicitly by
+    # deploy/deploy.sh before this service is (re)started.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    expose:
+      - "8000"
+    # slim image has no curl/wget — probe /health with stdlib python.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    image: ${YC_REGISTRY}/briefing-frontend:${IMAGE_TAG:-latest}
+    container_name: briefing-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # Static production build served by its own nginx on :80 (internal only).
+    expose:
+      - "80"
+
+  reverseproxy:
+    image: nginx:1.27-alpine
+    container_name: briefing-proxy
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    # Single public entrypoint. Terminate TLS here or upstream (see docs).
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
